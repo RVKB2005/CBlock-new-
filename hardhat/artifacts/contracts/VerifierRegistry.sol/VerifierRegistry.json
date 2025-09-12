@@ -1,0 +1,106 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "VerifierRegistry",
+  "sourceName": "contracts/VerifierRegistry.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_governanceExecutor",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "verifier",
+          "type": "address"
+        }
+      ],
+      "name": "VerifierAdded",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "verifier",
+          "type": "address"
+        }
+      ],
+      "name": "VerifierRemoved",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "verifier",
+          "type": "address"
+        }
+      ],
+      "name": "addVerifier",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "governanceExecutor",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "isVerifier",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "verifier",
+          "type": "address"
+        }
+      ],
+      "name": "removeVerifier",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x60803461007457601f6102ad38819003918201601f19168301916001600160401b038311848410176100795780849260209460405283398101031261007457516001600160a01b0381169081900361007457600180546001600160a01b03191691909117905560405161021d90816100908239f35b600080fd5b634e487b7160e01b600052604160045260246000fdfe608080604052600436101561001357600080fd5b600090813560e01c9081633310521814610161575080638fc98386146101385780639000b3d6146100c45763ca2dfd0a1461004d57600080fd5b346100c15760203660031901126100c1576004356001600160a01b03818116918290036100bd57610083906001541633146101a3565b808252816020526040822060ff1981541690557f44a3cd4eb5cc5748f6169df057b1cb2ae4c383e87cd94663c430e095d4cba4248280a280f35b8280fd5b80fd5b50346100c15760203660031901126100c1576004356001600160a01b03818116918290036100bd576100fb906001541633146101a3565b8082528160205260408220600160ff198254161790557f6d05492139c5ea989514a5d2150c028041e5c087e2a39967f67dc7d2655adb818280a280f35b50346100c157806003193601126100c1576001546040516001600160a01b039091168152602090f35b90503461019f57602036600319011261019f576004356001600160a01b038116908190036100bd5760408360ff926020955280855220541615158152f35b5080fd5b156101aa57565b60405162461bcd60e51b81526020600482015260156024820152742737ba1033b7bb32b93737b91032bc32b1baba37b960591b6044820152606490fdfea26469706673582212208ed7760bdf31b6d1cafb073545a81faf008f823ca033813d489c60aa1516de6864736f6c63430008120033",
+  "deployedBytecode": "0x608080604052600436101561001357600080fd5b600090813560e01c9081633310521814610161575080638fc98386146101385780639000b3d6146100c45763ca2dfd0a1461004d57600080fd5b346100c15760203660031901126100c1576004356001600160a01b03818116918290036100bd57610083906001541633146101a3565b808252816020526040822060ff1981541690557f44a3cd4eb5cc5748f6169df057b1cb2ae4c383e87cd94663c430e095d4cba4248280a280f35b8280fd5b80fd5b50346100c15760203660031901126100c1576004356001600160a01b03818116918290036100bd576100fb906001541633146101a3565b8082528160205260408220600160ff198254161790557f6d05492139c5ea989514a5d2150c028041e5c087e2a39967f67dc7d2655adb818280a280f35b50346100c157806003193601126100c1576001546040516001600160a01b039091168152602090f35b90503461019f57602036600319011261019f576004356001600160a01b038116908190036100bd5760408360ff926020955280855220541615158152f35b5080fd5b156101aa57565b60405162461bcd60e51b81526020600482015260156024820152742737ba1033b7bb32b93737b91032bc32b1baba37b960591b6044820152606490fdfea26469706673582212208ed7760bdf31b6d1cafb073545a81faf008f823ca033813d489c60aa1516de6864736f6c63430008120033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

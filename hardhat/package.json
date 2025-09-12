@@ -1,0 +1,27 @@
+{
+  "name": "carbon-market-hardhat",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "npx hardhat test",
+    "compile": "npx hardhat compile",
+    "deploy:sepolia": "npx hardhat run scripts/deploy_sepolia.js --network sepolia",
+    "deploy:local": "npx hardhat run scripts/deploy_sepolia.js --network localhost",
+    "node": "npx hardhat node",
+    "local-demo": "npx hardhat run scripts/start-local-demo.js --network localhost",
+    "update-abis": "node scripts/update-frontend-abis.js",
+    "add-verifier": "npx hardhat run scripts/add-verifier.js",
+    "add-verifier:local": "npx hardhat run scripts/add-verifier-local.js --network localhost",
+    "add-verifier:sepolia": "npx hardhat run scripts/add-verifier-local.js --network sepolia",
+    "build": "npm run compile && npm run update-abis",
+    "setup": "npm run build && npm run deploy:local"
+  },
+  "devDependencies": {
+    "hardhat": "^2.17.0",
+    "@nomicfoundation/hardhat-toolbox": "^3.0.0",
+    "dotenv": "^16.0.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.9.3",
+    "ethers": "^6.0.0"
+  }
+}
