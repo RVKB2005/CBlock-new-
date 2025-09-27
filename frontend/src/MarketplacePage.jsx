@@ -26,7 +26,7 @@ export default function MarketplacePage({ onShow }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('browse'); // 'browse', 'create'
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Create listing form
   const [listingForm, setListingForm] = useState({
     tokenId: '',
@@ -35,14 +35,14 @@ export default function MarketplacePage({ onShow }) {
   });
   const [listingErrors, setListingErrors] = useState({});
   const [isCreatingListing, setIsCreatingListing] = useState(false);
-  
+
   // Buy form states
   const [buyingStates, setBuyingStates] = useState({}); // { listingId: { amount: number, loading: boolean } }
   const [takingDownStates, setTakingDownStates] = useState({}); // { listingId: boolean }
 
   useEffect(() => {
     initializePage();
-    
+
     if (window.ethereum) {
       window.ethereum.on('accountsChanged', handleAccountsChanged);
       return () => window.ethereum.removeAllListeners('accountsChanged');
@@ -83,16 +83,10 @@ export default function MarketplacePage({ onShow }) {
     }
 
     try {
-      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-      if (accounts.length > 0) {
-        setWalletAddress(accounts[0]);
-      } else {
-        // Request connection
-        const requestedAccounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-        if (requestedAccounts.length > 0) {
-          setWalletAddress(requestedAccounts[0]);
-        }
-      }
+      // Use blockchain service to connect wallet properly
+      const walletInfo = await blockchainService.connectWallet();
+      setWalletAddress(walletInfo.address);
+      toast.success('Wallet connected successfully!');
     } catch (error) {
       console.error('Error connecting wallet:', error);
       toast.error('Failed to connect wallet');
@@ -101,22 +95,22 @@ export default function MarketplacePage({ onShow }) {
 
   const fetchListings = async () => {
     if (!window.ethereum) return;
-    
+
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const marketplaceAddr = import.meta.env.VITE_CONTRACT_MARKETPLACE_ADDRESS;
-      
+
       if (!marketplaceAddr || marketplaceAddr === '0x0000000000000000000000000000000000000000') {
         console.warn('Marketplace contract not configured');
         return;
       }
-      
+
       const market = new ethers.Contract(marketplaceAddr, MarketplaceABI, provider);
       const nextId = await market.nextListingId();
       const activeListings = [];
-      
+
       console.log('📋 Fetching listings, nextListingId:', nextId.toString());
-      
+
       // Start from 1 because listings are 1-indexed in the contract
       // Be more conservative: check from 1 to nextId (inclusive) but handle errors gracefully
       const maxId = Number(nextId);
@@ -129,7 +123,7 @@ export default function MarketplacePage({ onShow }) {
             amount: Number(listing.amount),
             pricePerUnit: listing.pricePerUnit.toString()
           });
-          
+
           // Check if listing has amount > 0 (active listing)
           if (Number(listing.amount) > 0) {
             const pricePerToken = Number(ethers.formatEther(listing.pricePerUnit));
@@ -147,7 +141,7 @@ export default function MarketplacePage({ onShow }) {
           console.warn(`Error fetching listing ${i}:`, error);
         }
       }
-      
+
       setListings(activeListings);
     } catch (error) {
       console.error('Error fetching listings:', error);
@@ -161,21 +155,21 @@ export default function MarketplacePage({ onShow }) {
       console.log('Service configured:', blockchainService.isConfigured());
       return;
     }
-    
+
     try {
       console.log('🔍 Fetching tokens for wallet:', walletAddress);
-      
+
       if (!blockchainService.isInitialized) {
         console.log('Initializing blockchain service...');
         await blockchainService.initialize();
       }
-      
+
       const tokens = await blockchainService.getUserTokens(walletAddress);
       console.log('📋 Found tokens:', tokens);
       setUserTokens(tokens);
-      
+
       if (tokens.length === 0) {
-        toast.info(`No tokens found for address ${walletAddress.slice(0,6)}...${walletAddress.slice(-4)}`);
+        toast.info(`No tokens found for address ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`);
       }
     } catch (error) {
       console.error('❌ Error fetching user tokens:', error);
@@ -185,11 +179,11 @@ export default function MarketplacePage({ onShow }) {
 
   const validateListingForm = () => {
     const errors = {};
-    
+
     if (!listingForm.tokenId) errors.tokenId = 'Token ID is required';
     if (!listingForm.amount || listingForm.amount <= 0) errors.amount = 'Amount must be greater than 0';
     if (!listingForm.pricePerToken || listingForm.pricePerToken <= 0) errors.pricePerToken = 'Price must be greater than 0';
-    
+
     // Check if user owns the token
     const userToken = userTokens.find(token => token.tokenId === parseInt(listingForm.tokenId));
     if (!userToken) {
@@ -197,7 +191,7 @@ export default function MarketplacePage({ onShow }) {
     } else if (userToken.balance < listingForm.amount) {
       errors.amount = `You only have ${userToken.balance} tokens available`;
     }
-    
+
     setListingErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -208,34 +202,46 @@ export default function MarketplacePage({ onShow }) {
       return;
     }
 
+    // Ensure wallet is connected
+    if (!walletAddress) {
+      toast.error('Please connect your wallet first');
+      await connectWallet();
+      return;
+    }
+
     setIsCreatingListing(true);
-    
+
     try {
+      // Ensure blockchain service is connected with wallet
+      if (!blockchainService.signer) {
+        await blockchainService.connectWallet();
+      }
+
       const result = await blockchainService.listCarbonCredits(
         parseInt(listingForm.tokenId),
         listingForm.amount,
         listingForm.pricePerToken
       );
-      
+
       toast.success('Listing created successfully!');
-      
+
       // Reset form
       setListingForm({ tokenId: '', amount: 1, pricePerToken: 0.01 });
       setListingErrors({});
-      
+
       // Refresh data
       await Promise.all([
         fetchListings(),
         fetchUserTokens()
       ]);
-      
+
       // Switch to browse tab to see the new listing
       setActiveTab('browse');
-      
+
     } catch (error) {
       console.error('Error creating listing:', error);
       let errorMessage = 'Failed to create listing: ';
-      
+
       if (error.message.includes('insufficient funds')) {
         errorMessage += 'Insufficient funds for gas fees';
       } else if (error.message.includes('user rejected')) {
@@ -243,7 +249,7 @@ export default function MarketplacePage({ onShow }) {
       } else {
         errorMessage += error.reason || error.message || 'Unknown error';
       }
-      
+
       toast.error(errorMessage);
     } finally {
       setIsCreatingListing(false);
@@ -256,28 +262,40 @@ export default function MarketplacePage({ onShow }) {
       return;
     }
 
+    // Ensure wallet is connected
+    if (!walletAddress) {
+      toast.error('Please connect your wallet first');
+      await connectWallet();
+      return;
+    }
+
     setBuyingStates(prev => ({
       ...prev,
       [listingId]: { ...prev[listingId], loading: true }
     }));
 
     try {
+      // Ensure blockchain service is connected with wallet
+      if (!blockchainService.signer) {
+        await blockchainService.connectWallet();
+      }
+
       await blockchainService.buyCarbonCredits(listingId, amount);
       toast.success(`Successfully purchased ${amount} carbon credits!`);
-      
+
       // Reset buy amount
       setBuyingStates(prev => ({
         ...prev,
         [listingId]: { amount: 1, loading: false }
       }));
-      
+
       // Refresh listings
       await fetchListings();
-      
+
     } catch (error) {
       console.error('Error buying tokens:', error);
       let errorMessage = 'Failed to purchase tokens: ';
-      
+
       if (error.message.includes('insufficient funds')) {
         errorMessage += 'Insufficient ETH balance';
       } else if (error.message.includes('user rejected')) {
@@ -285,7 +303,7 @@ export default function MarketplacePage({ onShow }) {
       } else {
         errorMessage += error.reason || error.message || 'Unknown error';
       }
-      
+
       toast.error(errorMessage);
     } finally {
       setBuyingStates(prev => ({
@@ -300,20 +318,32 @@ export default function MarketplacePage({ onShow }) {
       return;
     }
 
+    // Ensure wallet is connected
+    if (!walletAddress) {
+      toast.error('Please connect your wallet first');
+      await connectWallet();
+      return;
+    }
+
     setTakingDownStates(prev => ({ ...prev, [listingId]: true }));
 
     try {
+      // Ensure blockchain service is connected with wallet
+      if (!blockchainService.signer) {
+        await blockchainService.connectWallet();
+      }
+
       await blockchainService.takeDownListing(listingId);
       toast.success('Listing taken down successfully!');
-      
+
       // Refresh listings
       await fetchListings();
       await fetchUserTokens();
-      
+
     } catch (error) {
       console.error('Error taking down listing:', error);
       let errorMessage = 'Failed to take down listing: ';
-      
+
       if (error.message.includes('insufficient funds')) {
         errorMessage += 'Insufficient ETH balance to buy back your listing';
       } else if (error.message.includes('user rejected')) {
@@ -321,7 +351,7 @@ export default function MarketplacePage({ onShow }) {
       } else {
         errorMessage += error.reason || error.message || 'Unknown error';
       }
-      
+
       toast.error(errorMessage);
     } finally {
       setTakingDownStates(prev => ({ ...prev, [listingId]: false }));
@@ -333,7 +363,7 @@ export default function MarketplacePage({ onShow }) {
   };
 
   const filteredListings = listings.filter(listing =>
-    searchTerm === '' || 
+    searchTerm === '' ||
     listing.id.toString().includes(searchTerm) ||
     listing.tokenId.toString().includes(searchTerm) ||
     listing.seller.toLowerCase().includes(searchTerm.toLowerCase())
@@ -369,7 +399,7 @@ export default function MarketplacePage({ onShow }) {
           </h1>
           <p className="text-carbon-600 mt-1">Buy and sell verified carbon credits</p>
         </div>
-        
+
         <div className="flex flex-wrap items-center gap-3 mt-4 sm:mt-0">
           {/* Wallet Address Display */}
           {walletAddress && (
@@ -382,7 +412,7 @@ export default function MarketplacePage({ onShow }) {
               </div>
             </div>
           )}
-          
+
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -391,7 +421,7 @@ export default function MarketplacePage({ onShow }) {
           >
             My Tokens
           </motion.button>
-          
+
           {/* Manual Refresh Button */}
           <motion.button
             whileHover={{ scale: 1.05 }}
@@ -435,11 +465,10 @@ export default function MarketplacePage({ onShow }) {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
-              activeTab === tab.key
-                ? 'bg-white text-primary-600 shadow-sm'
-                : 'text-carbon-600 hover:text-carbon-900'
-            }`}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-md font-medium text-sm transition-colors ${activeTab === tab.key
+              ? 'bg-white text-primary-600 shadow-sm'
+              : 'text-carbon-600 hover:text-carbon-900'
+              }`}
           >
             <tab.icon className="w-4 h-4" />
             <span>{tab.label}</span>
@@ -468,7 +497,7 @@ export default function MarketplacePage({ onShow }) {
                   className="pl-10 input-primary"
                 />
               </div>
-              
+
               <div className="text-sm text-carbon-600">
                 {filteredListings.length} listing{filteredListings.length !== 1 ? 's' : ''} available
               </div>
@@ -523,13 +552,13 @@ export default function MarketplacePage({ onShow }) {
                           <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Your Listing</span>
                         )}
                       </div>
-                      
+
                       <div className="space-y-2">
                         <div className="flex items-center text-sm text-carbon-600">
                           <UserIcon className="w-4 h-4 mr-2" />
                           <span>Seller: {formatAddress(listing.seller)}</span>
                         </div>
-                        
+
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
                             <p className="text-carbon-500">Available</p>
@@ -541,7 +570,7 @@ export default function MarketplacePage({ onShow }) {
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="border-t pt-4">
                         <div className="flex items-center space-x-2 mb-3">
                           <input
@@ -557,14 +586,14 @@ export default function MarketplacePage({ onShow }) {
                             placeholder="Amount"
                           />
                         </div>
-                        
+
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-sm text-carbon-600">Total Cost:</span>
                           <span className="font-semibold text-carbon-900">
                             {((buyingStates[listing.id]?.amount || 1) * listing.pricePerToken).toFixed(4)} ETH
                           </span>
                         </div>
-                        
+
                         {listing.seller.toLowerCase() === walletAddress?.toLowerCase() ? (
                           // Owner buttons
                           <div className="space-y-2">
@@ -697,7 +726,7 @@ export default function MarketplacePage({ onShow }) {
                     </p>
                   )}
                 </div>
-                
+
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-carbon-700">
                     Amount to Sell
@@ -717,7 +746,7 @@ export default function MarketplacePage({ onShow }) {
                     </p>
                   )}
                 </div>
-                
+
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-carbon-700">
                     Price per Credit (ETH)
@@ -738,7 +767,7 @@ export default function MarketplacePage({ onShow }) {
                     </p>
                   )}
                 </div>
-                
+
                 {listingForm.amount && listingForm.pricePerToken && (
                   <div className="bg-carbon-50 rounded-lg p-4">
                     <div className="flex justify-between items-center">
@@ -750,7 +779,7 @@ export default function MarketplacePage({ onShow }) {
                   </div>
                 )}
               </div>
-              
+
               <div className="flex space-x-4">
                 <motion.button
                   whileHover={{ scale: 1.02 }}
@@ -771,7 +800,7 @@ export default function MarketplacePage({ onShow }) {
                     </>
                   )}
                 </motion.button>
-                
+
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}

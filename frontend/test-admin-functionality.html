@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Functionality Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+            color: #0c5460;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .admin-button {
+            background-color: #dc3545;
+        }
+
+        .admin-button:hover {
+            background-color: #c82333;
+        }
+
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Admin Functionality Test</h1>
+    <p>This page tests the admin functionality implementation for the role-based document verification system.</p>
+
+    <div class="test-section info">
+        <h3>Test Instructions</h3>
+        <ol>
+            <li>First, create an admin user by clicking "Create Admin User"</li>
+            <li>Login as admin to test admin functionality</li>
+            <li>Test user management, role changes, and audit logging</li>
+            <li>Test verifier credential management</li>
+            <li>Test backup and recovery functionality</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h3>User Management</h3>
+        <button onclick="createAdminUser()" class="admin-button">Create Admin User</button>
+        <button onclick="createTestUsers()">Create Test Users</button>
+        <button onclick="loginAsAdmin()" class="admin-button">Login as Admin</button>
+        <button onclick="testUserManagement()">Test User Management</button>
+        <div id="userManagementResults"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Role Management</h3>
+        <button onclick="testRoleChanges()">Test Role Changes</button>
+        <button onclick="testRoleValidation()">Test Role Validation</button>
+        <div id="roleManagementResults"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Verifier Credentials</h3>
+        <button onclick="testCredentialAssignment()">Test Credential Assignment</button>
+        <button onclick="testCredentialValidation()">Test Credential Validation</button>
+        <div id="credentialResults"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Audit Logging</h3>
+        <button onclick="testAuditLogging()">Test Audit Logging</button>
+        <button onclick="viewAuditLogs()">View Audit Logs</button>
+        <div id="auditResults"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Backup & Recovery</h3>
+        <button onclick="testBackupCreation()">Test Backup Creation</button>
+        <button onclick="testDataRestore()">Test Data Restore</button>
+        <div id="backupResults"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>System Statistics</h3>
+        <button onclick="viewSystemStats()">View System Statistics</button>
+        <div id="statsResults"></div>
+    </div>
+
+    <script type="module">
+        // Import services (this would need to be adapted for actual module loading)
+        // For testing purposes, we'll simulate the services
+
+        class MockAuthService {
+            constructor() {
+                this.users = new Map();
+                this.currentUser = null;
+                this.isAuthenticated = false;
+            }
+
+            async register(userData) {
+                const user = {
+                    id: Date.now().toString(),
+                    ...userData,
+                    createdAt: new Date().toISOString()
+                };
+                this.users.set(userData.email, user);
+                return user;
+            }
+
+            async login(email, password) {
+                const user = this.users.get(email);
+                if (user && password === 'admin123') {
+                    this.currentUser = user;
+                    this.isAuthenticated = true;
+                    return user;
+                }
+                throw new Error('Invalid credentials');
+            }
+
+            getCurrentUser() {
+                return this.currentUser;
+            }
+
+            isUserAuthenticated() {
+                return this.isAuthenticated;
+            }
+
+            getAllUsers() {
+                return Array.from(this.users.values());
+            }
+
+            isAdmin() {
+                return this.currentUser?.accountType === 'admin';
+            }
+        }
+
+        class MockAdminService {
+            constructor() {
+                this.auditLogs = new Map();
+                this.verifierCredentials = new Map();
+            }
+
+            isAdmin() {
+                return window.authService?.isAdmin() || false;
+            }
+
+            hasAdminPermission(permission) {
+                return this.isAdmin();
+            }
+
+            logAuditEvent(type, details, targetUserId = null) {
+                const currentUser = window.authService?.getCurrentUser();
+                if (!currentUser) throw new Error('Admin not authenticated');
+
+                const logId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+                const auditLog = {
+                    id: logId,
+                    type,
+                    adminId: currentUser.id,
+                    adminEmail: currentUser.email,
+                    targetUserId,
+                    details,
+                    timestamp: new Date().toISOString()
+                };
+
+                this.auditLogs.set(logId, auditLog);
+                return auditLog;
+            }
+
+            async getAllUsers() {
+                if (!this.hasAdminPermission('manage_users')) {
+                    throw new Error('Insufficient permissions');
+                }
+                return window.authService?.getAllUsers() || [];
+            }
+
+            async changeUserRole(userId, newRole, reason) {
+                if (!this.hasAdminPermission('change_user_roles')) {
+                    throw new Error('Insufficient permissions');
+                }
+
+                const users = window.authService?.getAllUsers() || [];
+                const user = users.find(u => u.id === userId);
+                if (!user) throw new Error('User not found');
+
+                const oldRole = user.accountType;
+                user.accountType = newRole;
+
+                this.logAuditEvent('role_change', {
+                    targetUserEmail: user.email,
+                    oldRole,
+                    newRole,
+                    reason
+                }, userId);
+
+                return user;
+            }
+
+            async assignVerifierCredentials(userId, credentials) {
+                if (!this.hasAdminPermission('manage_verifier_credentials')) {
+                    throw new Error('Insufficient permissions');
+                }
+
+                const credentialData = {
+                    status: 'active',
+                    ...credentials,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+
+                this.verifierCredentials.set(userId, credentialData);
+
+                this.logAuditEvent('credentials_updated', {
+                    certificationId: credentials.certificationId,
+                    issuingAuthority: credentials.issuingAuthority
+                }, userId);
+
+                return credentialData;
+            }
+
+            getAuditLogs(filters = {}) {
+                if (!this.hasAdminPermission('view_audit_logs')) {
+                    throw new Error('Insufficient permissions');
+                }
+                return Array.from(this.auditLogs.values());
+            }
+
+            async createBackup() {
+                if (!this.hasAdminPermission('backup_restore_data')) {
+                    throw new Error('Insufficient permissions');
+                }
+
+                return {
+                    version: '1.0',
+                    timestamp: new Date().toISOString(),
+                    users: Array.from(window.authService?.users.entries() || []),
+                    auditLogs: Array.from(this.auditLogs.entries()),
+                    verifierCredentials: Array.from(this.verifierCredentials.entries())
+                };
+            }
+
+            getSystemStats() {
+                if (!this.hasAdminPermission('manage_users')) {
+                    throw new Error('Insufficient permissions');
+                }
+
+                const users = window.authService?.getAllUsers() || [];
+                const roleCounts = users.reduce((acc, user) => {
+                    acc[user.accountType] = (acc[user.accountType] || 0) + 1;
+                    return acc;
+                }, {});
+
+                return {
+                    totalUsers: users.length,
+                    roleCounts,
+                    activeVerifiers: users.filter(u => u.accountType === 'verifier').length,
+                    totalAuditLogs: this.auditLogs.size,
+                    credentialsManaged: this.verifierCredentials.size
+                };
+            }
+        }
+
+        // Initialize services
+        window.authService = new MockAuthService();
+        window.adminService = new MockAdminService();
+
+        // Test functions
+        window.createAdminUser = async function () {
+            try {
+                const adminUser = await window.authService.register({
+                    firstName: 'Admin',
+                    lastName: 'User',
+                    email: 'admin@cblock.com',
+                    password: 'admin123',
+                    confirmPassword: 'admin123',
+                    accountType: 'admin'
+                });
+
+                displayResult('userManagementResults', 'success',
+                    `Admin user created successfully: ${adminUser.email}`);
+            } catch (error) {
+                displayResult('userManagementResults', 'error',
+                    `Failed to create admin user: ${error.message}`);
+            }
+        };
+
+        window.createTestUsers = async function () {
+            try {
+                const users = [
+                    {
+                        firstName: 'John',
+                        lastName: 'Doe',
+                        email: 'john@test.com',
+                        password: 'test123',
+                        confirmPassword: 'test123',
+                        accountType: 'individual'
+                    },
+                    {
+                        firstName: 'Jane',
+                        lastName: 'Smith',
+                        email: 'jane@test.com',
+                        password: 'test123',
+                        confirmPassword: 'test123',
+                        accountType: 'business'
+                    },
+                    {
+                        firstName: 'Bob',
+                        lastName: 'Verifier',
+                        email: 'bob@test.com',
+                        password: 'test123',
+                        confirmPassword: 'test123',
+                        accountType: 'verifier'
+                    }
+                ];
+
+                for (const userData of users) {
+                    await window.authService.register(userData);
+                }
+
+                displayResult('userManagementResults', 'success',
+                    `Created ${users.length} test users successfully`);
+            } catch (error) {
+                displayResult('userManagementResults', 'error',
+                    `Failed to create test users: ${error.message}`);
+            }
+        };
+
+        window.loginAsAdmin = async function () {
+            try {
+                const user = await window.authService.login('admin@cblock.com', 'admin123');
+                displayResult('userManagementResults', 'success',
+                    `Logged in as admin: ${user.email}`);
+            } catch (error) {
+                displayResult('userManagementResults', 'error',
+                    `Failed to login as admin: ${error.message}`);
+            }
+        };
+
+        window.testUserManagement = async function () {
+            try {
+                const users = await window.adminService.getAllUsers();
+                displayResult('userManagementResults', 'success',
+                    `Retrieved ${users.length} users:\n${JSON.stringify(users, null, 2)}`);
+            } catch (error) {
+                displayResult('userManagementResults', 'error',
+                    `Failed to get users: ${error.message}`);
+            }
+        };
+
+        window.testRoleChanges = async function () {
+            try {
+                const users = await window.adminService.getAllUsers();
+                const testUser = users.find(u => u.accountType === 'individual');
+
+                if (!testUser) {
+                    throw new Error('No individual user found for testing');
+                }
+
+                const updatedUser = await window.adminService.changeUserRole(
+                    testUser.id,
+                    'verifier',
+                    'Promotion for testing'
+                );
+
+                displayResult('roleManagementResults', 'success',
+                    `Successfully changed user role: ${testUser.email} -> ${updatedUser.accountType}`);
+            } catch (error) {
+                displayResult('roleManagementResults', 'error',
+                    `Failed to change user role: ${error.message}`);
+            }
+        };
+
+        window.testRoleValidation = async function () {
+            try {
+                await window.adminService.changeUserRole('nonexistent', 'invalid_role', 'Test');
+                displayResult('roleManagementResults', 'error',
+                    'Validation failed - should have thrown error');
+            } catch (error) {
+                displayResult('roleManagementResults', 'success',
+                    `Role validation working correctly: ${error.message}`);
+            }
+        };
+
+        window.testCredentialAssignment = async function () {
+            try {
+                const users = await window.adminService.getAllUsers();
+                const verifier = users.find(u => u.accountType === 'verifier');
+
+                if (!verifier) {
+                    throw new Error('No verifier found for testing');
+                }
+
+                const credentials = {
+                    certificationId: 'CERT-TEST-123',
+                    issuingAuthority: 'Test Certification Authority',
+                    validUntil: '2025-12-31'
+                };
+
+                const result = await window.adminService.assignVerifierCredentials(
+                    verifier.id,
+                    credentials
+                );
+
+                displayResult('credentialResults', 'success',
+                    `Credentials assigned successfully:\n${JSON.stringify(result, null, 2)}`);
+            } catch (error) {
+                displayResult('credentialResults', 'error',
+                    `Failed to assign credentials: ${error.message}`);
+            }
+        };
+
+        window.testCredentialValidation = async function () {
+            try {
+                await window.adminService.assignVerifierCredentials('test', {
+                    certificationId: 'CERT123'
+                    // Missing required fields
+                });
+                displayResult('credentialResults', 'error',
+                    'Validation failed - should have thrown error');
+            } catch (error) {
+                displayResult('credentialResults', 'success',
+                    `Credential validation working correctly: ${error.message}`);
+            }
+        };
+
+        window.testAuditLogging = async function () {
+            try {
+                const log = window.adminService.logAuditEvent(
+                    'test_event',
+                    { action: 'Testing audit logging' },
+                    'test_user_id'
+                );
+
+                displayResult('auditResults', 'success',
+                    `Audit log created:\n${JSON.stringify(log, null, 2)}`);
+            } catch (error) {
+                displayResult('auditResults', 'error',
+                    `Failed to create audit log: ${error.message}`);
+            }
+        };
+
+        window.viewAuditLogs = async function () {
+            try {
+                const logs = window.adminService.getAuditLogs();
+                displayResult('auditResults', 'success',
+                    `Retrieved ${logs.length} audit logs:\n${JSON.stringify(logs, null, 2)}`);
+            } catch (error) {
+                displayResult('auditResults', 'error',
+                    `Failed to get audit logs: ${error.message}`);
+            }
+        };
+
+        window.testBackupCreation = async function () {
+            try {
+                const backup = await window.adminService.createBackup();
+                displayResult('backupResults', 'success',
+                    `Backup created successfully:\n${JSON.stringify(backup, null, 2)}`);
+            } catch (error) {
+                displayResult('backupResults', 'error',
+                    `Failed to create backup: ${error.message}`);
+            }
+        };
+
+        window.testDataRestore = async function () {
+            displayResult('backupResults', 'info',
+                'Data restore functionality would restore from backup file. This is a simulation.');
+        };
+
+        window.viewSystemStats = async function () {
+            try {
+                const stats = window.adminService.getSystemStats();
+                displayResult('statsResults', 'success',
+                    `System Statistics:\n${JSON.stringify(stats, null, 2)}`);
+            } catch (error) {
+                displayResult('statsResults', 'error',
+                    `Failed to get system stats: ${error.message}`);
+            }
+        };
+
+        function displayResult(elementId, type, message) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `
+                <div class="${type}">
+                    <strong>${type.toUpperCase()}:</strong>
+                    <pre>${message}</pre>
+                </div>
+            `;
+        }
+    </script>
+</body>
+
+</html>

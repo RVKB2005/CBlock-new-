@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  ChartBarIcon, 
-  WalletIcon, 
-  ShoppingBagIcon, 
+import {
+  ChartBarIcon,
+  WalletIcon,
+  ShoppingBagIcon,
   ArrowTrendingUpIcon,
   FireIcon,
   PlusCircleIcon,
@@ -13,6 +13,8 @@ import {
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import blockchainService from '../services/blockchain.js';
 import authService from '../services/auth.js';
+import UserBalanceCard from './UserBalanceCard.jsx';
+import UserDashboard from './UserDashboard.jsx';
 
 const mockMarketData = [
   { month: 'Jan', price: 25, volume: 1200 },
@@ -33,6 +35,15 @@ export default function Dashboard({ walletAddress, onPageChange }) {
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Check if user should see the enhanced dashboard
+  const currentUser = authService.getCurrentUser();
+  const userRole = currentUser?.accountType || 'individual';
+
+  // Use enhanced UserDashboard for individual and business users
+  if (userRole === 'individual' || userRole === 'business') {
+    return <UserDashboard onPageChange={onPageChange} />;
+  }
+
   useEffect(() => {
     if (walletAddress) {
       loadDashboardData();
@@ -44,7 +55,7 @@ export default function Dashboard({ walletAddress, onPageChange }) {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      
+
       if (!walletAddress) {
         setLoading(false);
         return;
@@ -68,19 +79,19 @@ export default function Dashboard({ walletAddress, onPageChange }) {
       if (!blockchainService.isInitialized) {
         await blockchainService.initialize();
       }
-      
+
       // Get user's tokens from blockchain
       const tokens = await blockchainService.getUserTokens(walletAddress);
       const certificates = await blockchainService.getRetirementCertificates(walletAddress);
       const marketListings = await blockchainService.getMarketplaceListings();
-      
+
       // Calculate stats from real data
       const totalTokens = tokens.reduce((sum, token) => sum + token.balance, 0);
       const totalValue = totalTokens * 35; // Price per token in USD
-      const userListings = marketListings.filter(listing => 
+      const userListings = marketListings.filter(listing =>
         listing.seller.toLowerCase() === walletAddress.toLowerCase()
       );
-      
+
       setStats({
         totalTokens,
         totalValue,
@@ -114,7 +125,7 @@ export default function Dashboard({ walletAddress, onPageChange }) {
           txHash: `0x${Math.random().toString(16).slice(2, 10)}...`
         });
       }
-      
+
       setRecentActivity(activity);
 
     } catch (error) {
@@ -226,7 +237,7 @@ export default function Dashboard({ walletAddress, onPageChange }) {
           </div>
         </motion.div>
       )}
-      
+
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -295,6 +306,9 @@ export default function Dashboard({ walletAddress, onPageChange }) {
         />
       </div>
 
+      {/* User Balance Card */}
+      <UserBalanceCard className="mb-8" />
+
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Price Trend */}
@@ -316,18 +330,18 @@ export default function Dashboard({ walletAddress, onPageChange }) {
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="month" stroke="#64748b" />
               <YAxis stroke="#64748b" />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'white', 
-                  border: '1px solid #e2e8f0', 
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'white',
+                  border: '1px solid #e2e8f0',
                   borderRadius: '8px',
                   boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                 }}
               />
-              <Line 
-                type="monotone" 
-                dataKey="price" 
-                stroke="#22c55e" 
+              <Line
+                type="monotone"
+                dataKey="price"
+                stroke="#22c55e"
                 strokeWidth={3}
                 dot={{ fill: '#22c55e', strokeWidth: 2, r: 4 }}
               />
@@ -351,16 +365,16 @@ export default function Dashboard({ walletAddress, onPageChange }) {
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="month" stroke="#64748b" />
               <YAxis stroke="#64748b" />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'white', 
-                  border: '1px solid #e2e8f0', 
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'white',
+                  border: '1px solid #e2e8f0',
                   borderRadius: '8px',
                   boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                 }}
               />
-              <Bar 
-                dataKey="volume" 
+              <Bar
+                dataKey="volume"
                 fill="#22c55e"
                 radius={[4, 4, 0, 0]}
               />
@@ -389,11 +403,10 @@ export default function Dashboard({ walletAddress, onPageChange }) {
                 transition={{ delay: index * 0.1 }}
                 className="flex items-center space-x-4 p-4 rounded-lg bg-carbon-50 hover:bg-carbon-100 transition-colors"
               >
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  activity.type === 'mint' ? 'bg-green-100 text-green-600' :
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${activity.type === 'mint' ? 'bg-green-100 text-green-600' :
                   activity.type === 'sell' ? 'bg-blue-100 text-blue-600' :
-                  'bg-red-100 text-red-600'
-                }`}>
+                    'bg-red-100 text-red-600'
+                  }`}>
                   {activity.type === 'mint' && <PlusCircleIcon className="w-5 h-5" />}
                   {activity.type === 'sell' && <ShoppingBagIcon className="w-5 h-5" />}
                   {activity.type === 'retire' && <FireIcon className="w-5 h-5" />}

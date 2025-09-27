@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   HomeIcon,
@@ -10,34 +10,75 @@ import {
   ChartBarIcon,
   CogIcon,
   Bars3Icon,
-  UserIcon
+  UserIcon,
+  ShieldCheckIcon
 } from '@heroicons/react/24/outline';
 import WalletConnection from './WalletConnection';
+import NotificationBadge from './NotificationBadge';
+import Breadcrumb, { useBreadcrumb } from './Breadcrumb.jsx';
+import { RoleBadge } from './RoleIndicator.jsx';
+import { useRoleBasedNavigation } from '../hooks/useRoleBasedNavigation.js';
+import { getRoleDisplayName } from '../utils/permissions.js';
 
-const navigation = [
-  { name: 'Dashboard', href: 'dashboard', icon: HomeIcon, description: 'Overview of your portfolio' },
-  { name: 'My Tokens', href: 'tokens', icon: WalletIcon, description: 'View your carbon credits' },
-  { name: 'Mint Credits', href: 'mint', icon: PlusCircleIcon, description: 'Create new carbon credits' },
-  { name: 'Marketplace', href: 'market', icon: ShoppingBagIcon, description: 'Buy and sell credits' },
-  { name: 'Retire Credits', href: 'retire', icon: ArrowRightOnRectangleIcon, description: 'Retire credits for impact' },
-  { name: 'Analytics', href: 'analytics', icon: ChartBarIcon, description: 'Market insights and trends' },
-];
+// Icon mapping for navigation items
+const iconMap = {
+  HomeIcon,
+  PlusCircleIcon,
+  ShoppingBagIcon,
+  ArrowRightOnRectangleIcon,
+  WalletIcon,
+  ChartBarIcon,
+  ShieldCheckIcon
+};
 
 export default function Layout({ children, currentPage, onPageChange, walletAddress, onConnectWallet, user, onLogout }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const {
+    getRoleBasedNavigation,
+    navigateWithAccessControl,
+    handleRoleBasedRedirect,
+    userRole,
+    isVerifier
+  } = useRoleBasedNavigation(user);
+
+  // Generate breadcrumb items for current page
+  const breadcrumbItems = useBreadcrumb(currentPage, userRole);
+
+  // Get filtered navigation based on user role
+  const navigation = getRoleBasedNavigation;
+
+  // Handle role-based redirects when page changes
+  useEffect(() => {
+    if (user && currentPage) {
+      const wasRedirected = handleRoleBasedRedirect(currentPage, onPageChange);
+      if (wasRedirected) {
+        console.log(`User redirected from ${currentPage} due to role restrictions`);
+      }
+    }
+  }, [currentPage, user, handleRoleBasedRedirect, onPageChange]);
+
+  // Handle navigation with access control
+  const handleNavigation = (page) => {
+    navigateWithAccessControl(page, onPageChange, (deniedPage, role) => {
+      console.warn(`Access denied to ${deniedPage} for role ${role}`);
+      // Could show a toast notification here
+    });
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-carbon-50 via-white to-primary-50">
       {/* Mobile sidebar */}
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {sidebarOpen && (
           <motion.div
+            key="mobile-sidebar"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 lg:hidden"
           >
             <motion.div
+              key="mobile-sidebar-backdrop"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -45,6 +86,7 @@ export default function Layout({ children, currentPage, onPageChange, walletAddr
               onClick={() => setSidebarOpen(false)}
             />
             <motion.div
+              key="mobile-sidebar-content"
               initial={{ x: -300 }}
               animate={{ x: 0 }}
               exit={{ x: -300 }}
@@ -65,10 +107,11 @@ export default function Layout({ children, currentPage, onPageChange, walletAddr
                   <XMarkIcon className="w-6 h-6 text-carbon-600" />
                 </button>
               </div>
-              <MobileNavigation 
-                navigation={navigation} 
-                currentPage={currentPage} 
+              <MobileNavigation
+                navigation={navigation}
+                currentPage={currentPage}
                 onPageChange={onPageChange}
+                handleNavigation={handleNavigation}
                 onClose={() => setSidebarOpen(false)}
               />
             </motion.div>
@@ -99,16 +142,15 @@ export default function Layout({ children, currentPage, onPageChange, walletAddr
                   key={item.name}
                   whileHover={{ x: 4 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => onPageChange(item.href)}
-                  className={`w-full flex items-center px-4 py-3 rounded-xl text-left transition-all duration-200 group ${
-                    isActive
-                      ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200'
-                      : 'text-carbon-700 hover:bg-carbon-50 hover:text-carbon-900'
-                  }`}
+                  onClick={() => handleNavigation(item.href)}
+                  className={`w-full flex items-center px-4 py-3 rounded-xl text-left transition-all duration-200 group ${isActive
+                    ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200'
+                    : 'text-carbon-700 hover:bg-carbon-50 hover:text-carbon-900'
+                    }`}
                 >
-                  <item.icon className={`w-6 h-6 mr-3 transition-colors ${
-                    isActive ? 'text-primary-600' : 'text-carbon-500 group-hover:text-carbon-700'
-                  }`} />
+                  {React.createElement(iconMap[item.icon] || HomeIcon, {
+                    className: `w-6 h-6 mr-3 transition-colors ${isActive ? 'text-primary-600' : 'text-carbon-500 group-hover:text-carbon-700'}`
+                  })}
                   <div className="flex-1">
                     <div className="font-semibold">{item.name}</div>
                     <div className="text-xs opacity-70">{item.description}</div>
@@ -135,6 +177,7 @@ export default function Layout({ children, currentPage, onPageChange, walletAddr
                   <p className="text-xs text-carbon-600 truncate">
                     {user.email}
                   </p>
+                  <RoleBadge user={user} />
                 </div>
                 <div className="flex space-x-1">
                   <button
@@ -154,7 +197,7 @@ export default function Layout({ children, currentPage, onPageChange, walletAddr
                 </div>
               </div>
             )}
-            
+
             <WalletConnection address={walletAddress} onConnect={onConnectWallet} />
           </div>
         </div>
@@ -176,11 +219,25 @@ export default function Layout({ children, currentPage, onPageChange, walletAddr
             </div>
             <h1 className="text-lg font-bold gradient-text">CBlock</h1>
           </div>
-          <div className="w-10" /> {/* Spacer for centering */}
+          <div className="flex items-center space-x-2">
+            <NotificationBadge user={user} onClick={() => onPageChange('mint')} />
+            <div className="w-2" /> {/* Spacer */}
+          </div>
         </div>
 
         {/* Page content */}
         <main className="flex-1">
+          {/* Breadcrumb Navigation */}
+          {breadcrumbItems.length > 1 && (
+            <div className="bg-white border-b border-carbon-200 px-4 py-3 lg:px-8">
+              <Breadcrumb
+                items={breadcrumbItems}
+                onNavigate={handleNavigation}
+                className="max-w-7xl mx-auto"
+              />
+            </div>
+          )}
+
           <motion.div
             key={currentPage}
             initial={{ opacity: 0, y: 20 }}
@@ -197,7 +254,7 @@ export default function Layout({ children, currentPage, onPageChange, walletAddr
   );
 }
 
-function MobileNavigation({ navigation, currentPage, onPageChange, onClose }) {
+function MobileNavigation({ navigation, currentPage, onPageChange, onClose, handleNavigation }) {
   return (
     <nav className="flex-1 px-4 py-6 space-y-2">
       {navigation.map((item) => {
@@ -207,18 +264,17 @@ function MobileNavigation({ navigation, currentPage, onPageChange, onClose }) {
             key={item.name}
             whileTap={{ scale: 0.98 }}
             onClick={() => {
-              onPageChange(item.href);
+              handleNavigation(item.href);
               onClose();
             }}
-            className={`w-full flex items-center px-4 py-3 rounded-xl text-left transition-all duration-200 ${
-              isActive
-                ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200'
-                : 'text-carbon-700 hover:bg-carbon-50 hover:text-carbon-900'
-            }`}
+            className={`w-full flex items-center px-4 py-3 rounded-xl text-left transition-all duration-200 ${isActive
+              ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200'
+              : 'text-carbon-700 hover:bg-carbon-50 hover:text-carbon-900'
+              }`}
           >
-            <item.icon className={`w-6 h-6 mr-3 transition-colors ${
-              isActive ? 'text-primary-600' : 'text-carbon-500'
-            }`} />
+            {React.createElement(iconMap[item.icon] || HomeIcon, {
+              className: `w-6 h-6 mr-3 transition-colors ${isActive ? 'text-primary-600' : 'text-carbon-500'}`
+            })}
             <div className="flex-1">
               <div className="font-semibold">{item.name}</div>
               <div className="text-xs opacity-70">{item.description}</div>

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Role Guards Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        button {
+            margin: 5px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Role-Based Access Control Test</h1>
+
+    <div class="test-section info">
+        <h2>Current User Status</h2>
+        <p><strong>Authenticated:</strong> <span id="auth-status">Loading...</span></p>
+        <p><strong>Role:</strong> <span id="user-role">Loading...</span></p>
+        <p><strong>Permissions:</strong> <span id="user-permissions">Loading...</span></p>
+    </div>
+
+    <div class="test-section">
+        <h2>Test User Roles</h2>
+        <button class="btn-primary" onclick="testRole('individual')">Test as Individual</button>
+        <button class="btn-primary" onclick="testRole('business')">Test as Business</button>
+        <button class="btn-primary" onclick="testRole('verifier')">Test as Verifier</button>
+        <button class="btn-secondary" onclick="logout()">Logout</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Page Access Tests</h2>
+        <div id="access-tests">
+            <p>Select a role above to test page access permissions.</p>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Navigation Tests</h2>
+        <div id="navigation-tests">
+            <p>Navigation items will be filtered based on the selected role.</p>
+        </div>
+    </div>
+
+    <script type="module">
+        // Mock auth service for testing
+        const mockAuthService = {
+            currentUser: null,
+            isAuthenticated: false,
+
+            login(userData) {
+                this.currentUser = userData;
+                this.isAuthenticated = true;
+                this.updateUI();
+            },
+
+            logout() {
+                this.currentUser = null;
+                this.isAuthenticated = false;
+                this.updateUI();
+            },
+
+            getCurrentUser() {
+                return this.currentUser;
+            },
+
+            isUserAuthenticated() {
+                return this.isAuthenticated;
+            },
+
+            getUserRole() {
+                return this.currentUser?.accountType || 'individual';
+            },
+
+            hasPermission(permission) {
+                const rolePermissions = {
+                    individual: ['upload_document', 'view_own_documents', 'view_credits'],
+                    business: ['upload_document', 'view_own_documents', 'view_credits'],
+                    verifier: ['view_all_documents', 'attest_document', 'mint_credits', 'view_verifier_dashboard']
+                };
+
+                const role = this.getUserRole();
+                return rolePermissions[role]?.includes(permission) || false;
+            },
+
+            updateUI() {
+                document.getElementById('auth-status').textContent = this.isAuthenticated ? 'Yes' : 'No';
+                document.getElementById('user-role').textContent = this.isAuthenticated ? this.getUserRole() : 'None';
+
+                if (this.isAuthenticated) {
+                    const role = this.getUserRole();
+                    const permissions = this.getRolePermissions(role);
+                    document.getElementById('user-permissions').textContent = permissions.join(', ');
+                } else {
+                    document.getElementById('user-permissions').textContent = 'None';
+                }
+
+                this.testPageAccess();
+                this.testNavigation();
+            },
+
+            getRolePermissions(role) {
+                const rolePermissions = {
+                    individual: ['upload_document', 'view_own_documents', 'view_credits'],
+                    business: ['upload_document', 'view_own_documents', 'view_credits'],
+                    verifier: ['view_all_documents', 'attest_document', 'mint_credits', 'view_verifier_dashboard']
+                };
+                return rolePermissions[role] || [];
+            },
+
+            testPageAccess() {
+                const pages = [
+                    { name: 'Dashboard', roles: ['individual', 'business', 'verifier'], permissions: [] },
+                    { name: 'My Tokens', roles: ['individual', 'business', 'verifier'], permissions: ['view_credits'] },
+                    { name: 'Upload Documents', roles: ['individual', 'business'], permissions: ['upload_document'] },
+                    { name: 'Verifier Dashboard', roles: ['verifier'], permissions: ['view_verifier_dashboard', 'view_all_documents'] },
+                    { name: 'Marketplace', roles: ['individual', 'business', 'verifier'], permissions: [] },
+                    { name: 'Retire Credits', roles: ['individual', 'business', 'verifier'], permissions: ['view_credits'] }
+                ];
+
+                const accessTestsDiv = document.getElementById('access-tests');
+
+                if (!this.isAuthenticated) {
+                    accessTestsDiv.innerHTML = '<p class="error">❌ Not authenticated - access denied to all pages</p>';
+                    return;
+                }
+
+                const userRole = this.getUserRole();
+                let html = '<h3>Page Access Results:</h3>';
+
+                pages.forEach(page => {
+                    const hasRoleAccess = page.roles.includes(userRole);
+                    const hasPermissions = page.permissions.every(perm => this.hasPermission(perm));
+                    const hasAccess = hasRoleAccess && hasPermissions;
+
+                    const status = hasAccess ? '✅' : '❌';
+                    const className = hasAccess ? 'success' : 'error';
+
+                    let reason = '';
+                    if (!hasRoleAccess) {
+                        reason = ` (Role ${userRole} not in ${page.roles.join(', ')})`;
+                    } else if (!hasPermissions) {
+                        reason = ` (Missing permissions: ${page.permissions.join(', ')})`;
+                    }
+
+                    html += `<p class="${className}">${status} ${page.name}${reason}</p>`;
+                });
+
+                accessTestsDiv.innerHTML = html;
+            },
+
+            testNavigation() {
+                const navigationItems = [
+                    { name: 'Dashboard', roles: ['individual', 'business', 'verifier'], permissions: [] },
+                    { name: 'My Tokens', roles: ['individual', 'business', 'verifier'], permissions: ['view_credits'] },
+                    { name: 'Upload Documents', roles: ['individual', 'business'], permissions: ['upload_document'] },
+                    { name: 'Verifier Dashboard', roles: ['verifier'], permissions: ['view_verifier_dashboard'] },
+                    { name: 'Marketplace', roles: ['individual', 'business', 'verifier'], permissions: [] },
+                    { name: 'Analytics', roles: ['individual', 'business', 'verifier'], permissions: [] }
+                ];
+
+                const navigationTestsDiv = document.getElementById('navigation-tests');
+
+                if (!this.isAuthenticated) {
+                    navigationTestsDiv.innerHTML = '<p>No navigation items available (not authenticated)</p>';
+                    return;
+                }
+
+                const userRole = this.getUserRole();
+                const filteredItems = navigationItems.filter(item => {
+                    const hasRoleAccess = item.roles.includes(userRole);
+                    const hasPermissions = item.permissions.every(perm => this.hasPermission(perm));
+                    return hasRoleAccess && hasPermissions;
+                });
+
+                let html = '<h3>Available Navigation Items:</h3>';
+                if (filteredItems.length === 0) {
+                    html += '<p>No navigation items available for this role.</p>';
+                } else {
+                    html += '<ul>';
+                    filteredItems.forEach(item => {
+                        html += `<li>✅ ${item.name}</li>`;
+                    });
+                    html += '</ul>';
+                }
+
+                navigationTestsDiv.innerHTML = html;
+            }
+        };
+
+        // Global functions for buttons
+        window.testRole = function (role) {
+            const userData = {
+                id: '1',
+                name: `Test ${role.charAt(0).toUpperCase() + role.slice(1)}`,
+                email: `test-${role}@example.com`,
+                accountType: role
+            };
+
+            mockAuthService.login(userData);
+        };
+
+        window.logout = function () {
+            mockAuthService.logout();
+        };
+
+        // Initialize
+        mockAuthService.updateUI();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,4 @@
+const VerifierRegistry = await ethers.getContractFactory("VerifierRegistry")
+await verifier.governanceExecutor()
+const verifier = await VerifierRegistry.attach("0xD009D4EA4B9f546261433a75A32353a60d750200")
+const VerifierRegistry = await ethers.getContractFactory

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth Roles Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .pass {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .fail {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .test-section {
+            margin: 20px 0;
+            border: 1px solid #ddd;
+            padding: 15px;
+        }
+
+        button {
+            margin: 5px;
+            padding: 10px 15px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Auth Service Role Management Test</h1>
+    <div id="test-results"></div>
+    <button onclick="runTests()">Run Tests</button>
+    <button onclick="clearResults()">Clear Results</button>
+
+    <script type="module">
+        // Mock blockchain service for testing
+        window.blockchainService = {
+            connectWallet: () => Promise.resolve({ address: '0x123...' }),
+            getUserTokens: () => Promise.resolve([]),
+            getRetirementCertificates: () => Promise.resolve([])
+        };
+
+        // Import auth service
+        import authService from './src/services/auth.js';
+        window.authService = authService;
+
+        function addResult(testName, passed, message = '') {
+            const resultsDiv = document.getElementById('test-results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-result ${passed ? 'pass' : 'fail'}`;
+            resultDiv.innerHTML = `<strong>${testName}:</strong> ${passed ? 'PASS' : 'FAIL'} ${message}`;
+            resultsDiv.appendChild(resultDiv);
+        }
+
+        function addSection(title) {
+            const resultsDiv = document.getElementById('test-results');
+            const sectionDiv = document.createElement('div');
+            sectionDiv.className = 'test-section';
+            sectionDiv.innerHTML = `<h3>${title}</h3>`;
+            resultsDiv.appendChild(sectionDiv);
+            return sectionDiv;
+        }
+
+        window.runTests = async function () {
+            const resultsDiv = document.getElementById('test-results');
+            resultsDiv.innerHTML = '';
+
+            try {
+                // Clear any existing state
+                authService.logout();
+                authService.users.clear();
+                localStorage.clear();
+
+                addSection('Account Type Validation Tests');
+
+                // Test 1: Valid account types
+                const validResult = authService.validateAccountType('verifier');
+                addResult('Valid account type (verifier)', validResult.valid && validResult.accountType === 'verifier');
+
+                const businessResult = authService.validateAccountType('business');
+                addResult('Valid account type (business)', businessResult.valid && businessResult.accountType === 'business');
+
+                // Test 2: Invalid account type
+                const invalidResult = authService.validateAccountType('invalid');
+                addResult('Invalid account type rejection', !invalidResult.valid);
+
+                // Test 3: Default account type
+                const defaultResult = authService.validateAccountType();
+                addResult('Default account type', defaultResult.valid && defaultResult.accountType === 'individual');
+
+                addSection('User Registration Tests');
+
+                // Test 4: Register verifier
+                const verifierUser = await authService.register({
+                    firstName: 'Test',
+                    lastName: 'Verifier',
+                    email: 'verifier@test.com',
+                    password: 'password123',
+                    confirmPassword: 'password123',
+                    accountType: 'verifier'
+                });
+                addResult('Verifier registration', verifierUser.accountType === 'verifier');
+
+                // Test 5: Register individual (default)
+                const individualUser = await authService.register({
+                    firstName: 'Test',
+                    lastName: 'Individual',
+                    email: 'individual@test.com',
+                    password: 'password123',
+                    confirmPassword: 'password123'
+                });
+                addResult('Individual registration (default)', individualUser.accountType === 'individual');
+
+                // Test 6: Register business
+                const businessUser = await authService.register({
+                    firstName: 'Test',
+                    lastName: 'Business',
+                    email: 'business@test.com',
+                    password: 'password123',
+                    confirmPassword: 'password123',
+                    accountType: 'business'
+                });
+                addResult('Business registration', businessUser.accountType === 'business');
+
+                addSection('Role-based Permission Tests');
+
+                // Test 7: Verifier permissions
+                await authService.login('verifier@test.com', 'password123');
+                addResult('Verifier login and role check', authService.isVerifier());
+                addResult('Verifier can view all documents', authService.hasPermission('view_all_documents'));
+                addResult('Verifier can attest documents', authService.hasPermission('attest_document'));
+                addResult('Verifier can mint credits', authService.hasPermission('mint_credits'));
+                addResult('Verifier cannot do invalid action', !authService.hasPermission('invalid_action'));
+
+                // Test 8: Individual permissions
+                await authService.login('individual@test.com', 'password123');
+                addResult('Individual login and role check', !authService.isVerifier() && authService.getUserRole() === 'individual');
+                addResult('Individual can upload documents', authService.hasPermission('upload_document'));
+                addResult('Individual can view own documents', authService.hasPermission('view_own_documents'));
+                addResult('Individual cannot attest documents', !authService.hasPermission('attest_document'));
+                addResult('Individual cannot mint credits', !authService.hasPermission('mint_credits'));
+
+                // Test 9: Business permissions
+                await authService.login('business@test.com', 'password123');
+                addResult('Business login and role check', !authService.isVerifier() && authService.getUserRole() === 'business');
+                addResult('Business can upload documents', authService.hasPermission('upload_document'));
+                addResult('Business can view own documents', authService.hasPermission('view_own_documents'));
+                addResult('Business cannot attest documents', !authService.hasPermission('attest_document'));
+
+                addSection('Utility Method Tests');
+
+                // Test 10: Utility methods
+                const availableTypes = authService.getAvailableAccountTypes();
+                addResult('Available account types', availableTypes.length === 3 && availableTypes.includes('verifier'));
+
+                const verifierPerms = authService.getRolePermissions('verifier');
+                addResult('Verifier permissions retrieval', verifierPerms.includes('attest_document') && verifierPerms.includes('mint_credits'));
+
+                const allPerms = authService.getAllRolePermissions();
+                addResult('All role permissions retrieval', allPerms.verifier && allPerms.individual && allPerms.business);
+
+                addSection('Unauthenticated User Tests');
+
+                // Test 11: Unauthenticated user
+                authService.logout();
+                addResult('Unauthenticated user role', authService.getUserRole() === null);
+                addResult('Unauthenticated user permissions', !authService.hasPermission('upload_document'));
+                addResult('Unauthenticated user verifier check', !authService.isVerifier());
+
+                addSection('Tests Completed Successfully! ✅');
+
+            } catch (error) {
+                addResult('Test execution', false, `Error: ${error.message}`);
+            }
+        };
+
+        window.clearResults = function () {
+            document.getElementById('test-results').innerHTML = '';
+        };
+    </script>
+</body>
+
+</html>

@@ -1,4 +1,34 @@
-import blockchainService from './blockchain.js';
+import blockchainService from "./blockchain.js";
+
+// Role permission constants
+const ROLE_PERMISSIONS = {
+  individual: ["upload_document", "view_own_documents", "view_credits"],
+  business: ["upload_document", "view_own_documents", "view_credits"],
+  verifier: [
+    "view_all_documents",
+    "attest_document",
+    "mint_credits",
+    "view_verifier_dashboard",
+  ],
+  admin: [
+    "manage_users",
+    "change_user_roles",
+    "view_audit_logs",
+    "manage_verifier_credentials",
+    "backup_restore_data",
+    "view_admin_dashboard",
+    // Admin also has all other permissions
+    "upload_document",
+    "view_own_documents",
+    "view_credits",
+    "view_all_documents",
+    "attest_document",
+    "mint_credits",
+    "view_verifier_dashboard",
+  ],
+};
+
+const VALID_ACCOUNT_TYPES = ["individual", "business", "verifier", "admin"];
 
 class AuthService {
   constructor() {
@@ -11,13 +41,13 @@ class AuthService {
   // Initialize storage - load users from localStorage
   initializeStorage() {
     try {
-      const stored = localStorage.getItem('cblock_users');
+      const stored = localStorage.getItem("cblock_users");
       if (stored) {
         const usersArray = JSON.parse(stored);
         this.users = new Map(usersArray);
       }
     } catch (error) {
-      console.error('Failed to load users from storage:', error);
+      console.error("Failed to load users from storage:", error);
       this.users = new Map();
     }
   }
@@ -26,9 +56,9 @@ class AuthService {
   saveToStorage() {
     try {
       const usersArray = Array.from(this.users.entries());
-      localStorage.setItem('cblock_users', JSON.stringify(usersArray));
+      localStorage.setItem("cblock_users", JSON.stringify(usersArray));
     } catch (error) {
-      console.error('Failed to save users to storage:', error);
+      console.error("Failed to save users to storage:", error);
     }
   }
 
@@ -38,7 +68,7 @@ class AuthService {
     let hash = 0;
     for (let i = 0; i < password.length; i++) {
       const char = password.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32bit integer
     }
     return hash.toString();
@@ -53,35 +83,38 @@ class AuthService {
   // Validate password strength
   validatePassword(password) {
     if (password.length < 6) {
-      return { valid: false, message: 'Password must be at least 6 characters long' };
+      return {
+        valid: false,
+        message: "Password must be at least 6 characters long",
+      };
     }
     return { valid: true };
   }
 
   // Register new user
   async register(userData) {
-    const { 
-      firstName, 
-      lastName, 
-      email, 
-      password, 
-      confirmPassword, 
+    const {
+      firstName,
+      lastName,
+      email,
+      password,
+      confirmPassword,
       organization,
       accountType,
-      walletAddress 
+      walletAddress,
     } = userData;
 
     // Validation
     if (!firstName || !lastName || !email || !password) {
-      throw new Error('Please fill in all required fields');
+      throw new Error("Please fill in all required fields");
     }
 
     if (!this.validateEmail(email)) {
-      throw new Error('Please enter a valid email address');
+      throw new Error("Please enter a valid email address");
     }
 
     if (password !== confirmPassword) {
-      throw new Error('Passwords do not match');
+      throw new Error("Passwords do not match");
     }
 
     const passwordValidation = this.validatePassword(password);
@@ -89,9 +122,15 @@ class AuthService {
       throw new Error(passwordValidation.message);
     }
 
+    // Validate account type
+    const accountTypeValidation = this.validateAccountType(accountType);
+    if (!accountTypeValidation.valid) {
+      throw new Error(accountTypeValidation.message);
+    }
+
     // Check if user already exists
     if (this.users.has(email)) {
-      throw new Error('An account with this email already exists');
+      throw new Error("An account with this email already exists");
     }
 
     // Create user object
@@ -101,18 +140,18 @@ class AuthService {
       firstName,
       lastName,
       email,
-      organization: organization || '',
-      accountType: accountType || 'individual',
-      walletAddress: walletAddress || '',
+      organization: organization || "",
+      accountType: accountTypeValidation.accountType,
+      walletAddress: walletAddress || "",
       passwordHash: this.hashPassword(password),
       createdAt: new Date().toISOString(),
       isVerified: false,
       profile: {
         avatar: null,
-        bio: '',
-        location: '',
-        website: ''
-      }
+        bio: "",
+        location: "",
+        website: "",
+      },
     };
 
     // Save user
@@ -127,23 +166,23 @@ class AuthService {
   // Login user
   async login(email, password) {
     if (!email || !password) {
-      throw new Error('Please enter both email and password');
+      throw new Error("Please enter both email and password");
     }
 
     if (!this.validateEmail(email)) {
-      throw new Error('Please enter a valid email address');
+      throw new Error("Please enter a valid email address");
     }
 
     // Find user
     const user = this.users.get(email);
     if (!user) {
-      throw new Error('Invalid email or password');
+      throw new Error("Invalid email or password");
     }
 
     // Check password
     const passwordHash = this.hashPassword(password);
     if (user.passwordHash !== passwordHash) {
-      throw new Error('Invalid email or password');
+      throw new Error("Invalid email or password");
     }
 
     // Update last login
@@ -164,7 +203,7 @@ class AuthService {
   logout() {
     this.currentUser = null;
     this.isAuthenticated = false;
-    localStorage.removeItem('cblock_user_session');
+    localStorage.removeItem("cblock_user_session");
   }
 
   // Get current user
@@ -181,26 +220,97 @@ class AuthService {
     return this.isAuthenticated && this.currentUser !== null;
   }
 
+  // Get current user's role
+  getUserRole() {
+    if (!this.currentUser) {
+      return null;
+    }
+    return this.currentUser.accountType || "individual";
+  }
+
+  // Check if user has specific permission
+  hasPermission(action) {
+    const role = this.getUserRole();
+    if (!role) {
+      return false;
+    }
+    return ROLE_PERMISSIONS[role]?.includes(action) || false;
+  }
+
+  // Check if current user is a verifier
+  isVerifier() {
+    return this.getUserRole() === "verifier";
+  }
+
+  // Check if current user is an admin
+  isAdmin() {
+    return this.getUserRole() === "admin";
+  }
+
+  // Validate account type
+  validateAccountType(accountType) {
+    if (!accountType) {
+      return { valid: true, accountType: "individual" }; // Default to individual
+    }
+
+    if (!VALID_ACCOUNT_TYPES.includes(accountType)) {
+      return {
+        valid: false,
+        message: `Invalid account type. Must be one of: ${VALID_ACCOUNT_TYPES.join(
+          ", "
+        )}`,
+      };
+    }
+
+    return { valid: true, accountType };
+  }
+
+  // Get available account types
+  getAvailableAccountTypes() {
+    return [...VALID_ACCOUNT_TYPES];
+  }
+
+  // Get permissions for a specific role
+  getRolePermissions(role) {
+    return ROLE_PERMISSIONS[role] || [];
+  }
+
+  // Get all role permissions
+  getAllRolePermissions() {
+    return { ...ROLE_PERMISSIONS };
+  }
+
   // Update user profile
   async updateProfile(updates) {
     if (!this.isAuthenticated || !this.currentUser) {
-      throw new Error('User not authenticated');
+      throw new Error("User not authenticated");
     }
 
     const user = this.users.get(this.currentUser.email);
     if (!user) {
-      throw new Error('User not found');
+      throw new Error("User not found");
+    }
+
+    // Validate account type if being updated
+    if (updates.accountType !== undefined) {
+      const accountTypeValidation = this.validateAccountType(
+        updates.accountType
+      );
+      if (!accountTypeValidation.valid) {
+        throw new Error(accountTypeValidation.message);
+      }
+      user.accountType = accountTypeValidation.accountType;
     }
 
     // Update allowed fields
     const allowedUpdates = [
-      'firstName', 
-      'lastName', 
-      'organization', 
-      'walletAddress'
+      "firstName",
+      "lastName",
+      "organization",
+      "walletAddress",
     ];
 
-    allowedUpdates.forEach(field => {
+    allowedUpdates.forEach((field) => {
       if (updates[field] !== undefined) {
         user[field] = updates[field];
       }
@@ -230,18 +340,18 @@ class AuthService {
   // Change password
   async changePassword(currentPassword, newPassword) {
     if (!this.isAuthenticated || !this.currentUser) {
-      throw new Error('User not authenticated');
+      throw new Error("User not authenticated");
     }
 
     const user = this.users.get(this.currentUser.email);
     if (!user) {
-      throw new Error('User not found');
+      throw new Error("User not found");
     }
 
     // Verify current password
     const currentPasswordHash = this.hashPassword(currentPassword);
     if (user.passwordHash !== currentPasswordHash) {
-      throw new Error('Current password is incorrect');
+      throw new Error("Current password is incorrect");
     }
 
     // Validate new password
@@ -264,20 +374,20 @@ class AuthService {
   // Connect wallet to user account
   async connectWallet() {
     if (!this.isAuthenticated || !this.currentUser) {
-      throw new Error('User not authenticated');
+      throw new Error("User not authenticated");
     }
 
     try {
       const walletInfo = await blockchainService.connectWallet();
-      
+
       // Update user's wallet address
-      await this.updateProfile({ 
-        walletAddress: walletInfo.address 
+      await this.updateProfile({
+        walletAddress: walletInfo.address,
       });
 
       return walletInfo;
     } catch (error) {
-      console.error('Failed to connect wallet:', error);
+      console.error("Failed to connect wallet:", error);
       throw error;
     }
   }
@@ -293,14 +403,16 @@ class AuthService {
         totalTokens: 0,
         totalValue: 0,
         retiredTokens: 0,
-        certificatesCount: 0
+        certificatesCount: 0,
       };
     }
 
     try {
       // Get user's tokens from blockchain
       const tokens = await blockchainService.getUserTokens(userAddress);
-      const certificates = await blockchainService.getRetirementCertificates(userAddress);
+      const certificates = await blockchainService.getRetirementCertificates(
+        userAddress
+      );
 
       const totalTokens = tokens.reduce((sum, token) => sum + token.balance, 0);
       const totalValue = totalTokens * 35; // Mock price calculation
@@ -312,17 +424,17 @@ class AuthService {
         retiredTokens,
         certificatesCount: certificates.length,
         tokens,
-        certificates
+        certificates,
       };
     } catch (error) {
-      console.error('Error getting user stats:', error);
+      console.error("Error getting user stats:", error);
       return {
         totalTokens: 0,
         totalValue: 0,
         retiredTokens: 0,
         certificatesCount: 0,
         tokens: [],
-        certificates: []
+        certificates: [],
       };
     }
   }
@@ -330,12 +442,12 @@ class AuthService {
   // Reset password (simplified - in production would send email)
   async resetPassword(email) {
     if (!this.validateEmail(email)) {
-      throw new Error('Please enter a valid email address');
+      throw new Error("Please enter a valid email address");
     }
 
     const user = this.users.get(email);
     if (!user) {
-      throw new Error('No account found with this email address');
+      throw new Error("No account found with this email address");
     }
 
     // In production, you would send a reset email here
@@ -348,16 +460,16 @@ class AuthService {
     this.saveToStorage();
 
     // In production, don't return the password
-    return { 
-      success: true, 
-      message: 'Password reset successful',
-      tempPassword: tempPassword // Only for demo
+    return {
+      success: true,
+      message: "Password reset successful",
+      tempPassword: tempPassword, // Only for demo
     };
   }
 
   // Get all users (admin only - simplified for demo)
   getAllUsers() {
-    const usersArray = Array.from(this.users.values()).map(user => {
+    const usersArray = Array.from(this.users.values()).map((user) => {
       const { passwordHash, ...userWithoutPassword } = user;
       return userWithoutPassword;
     });
@@ -367,18 +479,18 @@ class AuthService {
   // Delete account
   async deleteAccount(password) {
     if (!this.isAuthenticated || !this.currentUser) {
-      throw new Error('User not authenticated');
+      throw new Error("User not authenticated");
     }
 
     const user = this.users.get(this.currentUser.email);
     if (!user) {
-      throw new Error('User not found');
+      throw new Error("User not found");
     }
 
     // Verify password
     const passwordHash = this.hashPassword(password);
     if (user.passwordHash !== passwordHash) {
-      throw new Error('Password is incorrect');
+      throw new Error("Password is incorrect");
     }
 
     // Delete user
@@ -393,14 +505,15 @@ class AuthService {
 
   // Check if user has connected wallet
   hasConnectedWallet() {
-    return this.currentUser?.walletAddress && 
-           this.currentUser.walletAddress !== '';
+    return (
+      this.currentUser?.walletAddress && this.currentUser.walletAddress !== ""
+    );
   }
 
   // Initialize session from storage
   initializeSession() {
     try {
-      const session = localStorage.getItem('cblock_user_session');
+      const session = localStorage.getItem("cblock_user_session");
       if (session) {
         const sessionData = JSON.parse(session);
         const user = this.users.get(sessionData.email);
@@ -412,29 +525,31 @@ class AuthService {
           // If user not found in storage but session exists, create from session data
           const restoredUser = {
             id: sessionData.id,
-            name: sessionData.name || `${sessionData.firstName} ${sessionData.lastName}`,
+            name:
+              sessionData.name ||
+              `${sessionData.firstName} ${sessionData.lastName}`,
             firstName: sessionData.firstName,
             lastName: sessionData.lastName,
             email: sessionData.email,
-            organization: sessionData.organization || '',
-            accountType: sessionData.accountType || 'individual',
-            walletAddress: sessionData.walletAddress || '',
-            passwordHash: '', // Cannot restore password hash
+            organization: sessionData.organization || "",
+            accountType: sessionData.accountType || "individual",
+            walletAddress: sessionData.walletAddress || "",
+            passwordHash: "", // Cannot restore password hash
             createdAt: new Date().toISOString(),
             isVerified: true,
-            profile: { avatar: null, bio: '', location: '', website: '' }
+            profile: { avatar: null, bio: "", location: "", website: "" },
           };
-          
+
           this.users.set(sessionData.email, restoredUser);
           this.currentUser = restoredUser;
           this.isAuthenticated = true;
           this.saveToStorage();
-          
+
           return this.getCurrentUser();
         }
       }
     } catch (error) {
-      console.error('Failed to initialize session:', error);
+      console.error("Failed to initialize session:", error);
     }
     return null;
   }
@@ -451,9 +566,9 @@ class AuthService {
         accountType: this.currentUser.accountType,
         walletAddress: this.currentUser.walletAddress,
         id: this.currentUser.id,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
-      localStorage.setItem('cblock_user_session', JSON.stringify(sessionData));
+      localStorage.setItem("cblock_user_session", JSON.stringify(sessionData));
     }
   }
 }

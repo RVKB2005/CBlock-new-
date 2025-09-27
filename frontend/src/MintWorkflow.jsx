@@ -46,22 +46,23 @@ const WORKFLOW_STEPS = [
 ];
 
 export default function MintWorkflow() {
-  const [currentStep, setCurrentStep] = useState('upload');
-  const [completedSteps, setCompletedSteps] = useState(new Set());
-  const [uploadedData, setUploadedData] = useState(null);
-  const [signedData, setSignedData] = useState(null);
-  const [walletAddress, setWalletAddress] = useState('');
-  const [isVerifier, setIsVerifier] = useState(false);
-  const [isCheckingVerifier, setIsCheckingVerifier] = useState(false);
-  const [contractInfo, setContractInfo] = useState({
-    carbonAddress: '',
-    registryAddress: '',
-    isDeployed: false
-  });
-  const [networkInfo, setNetworkInfo] = useState({
-    chainId: null,
-    name: ''
-  });
+   const [currentStep, setCurrentStep] = useState('upload');
+   const [completedSteps, setCompletedSteps] = useState(new Set());
+   const [uploadedData, setUploadedData] = useState(null);
+   const [signedData, setSignedData] = useState(null);
+   const [uploaderInfo, setUploaderInfo] = useState(null);
+   const [walletAddress, setWalletAddress] = useState('');
+   const [isVerifier, setIsVerifier] = useState(false);
+   const [isCheckingVerifier, setIsCheckingVerifier] = useState(false);
+   const [contractInfo, setContractInfo] = useState({
+     carbonAddress: '',
+     registryAddress: '',
+     isDeployed: false
+   });
+   const [networkInfo, setNetworkInfo] = useState({
+     chainId: null,
+     name: ''
+   });
 
   useEffect(() => {
     initializeContracts();
@@ -188,8 +189,9 @@ export default function MintWorkflow() {
     }, 1500);
   };
 
-  const handleUploadComplete = (data) => {
+  const handleUploadComplete = (data, uploader) => {
     setUploadedData(data);
+    setUploaderInfo(uploader);
     setCompletedSteps(prev => new Set([...prev, 'upload']));
     setCurrentStep('sign');
     toast.success('📄 Document uploaded! Ready for attestation.');
@@ -212,6 +214,7 @@ export default function MintWorkflow() {
     setCompletedSteps(new Set());
     setUploadedData(null);
     setSignedData(null);
+    setUploaderInfo(null);
     toast.success('Workflow reset. Ready to start over!');
   };
 
@@ -442,7 +445,8 @@ export default function MintWorkflow() {
             {currentStep === 'upload' && (
               <Upload
                 key="upload"
-                onUploadComplete={handleUploadComplete}
+                onUploadComplete={(data) => handleUploadComplete(data, walletAddress)}
+                user={{ accountType: isVerifier ? 'verifier' : 'individual' }}
               />
             )}
             
@@ -450,6 +454,7 @@ export default function MintWorkflow() {
               <SignAttestation
                 key="sign"
                 uploadedData={uploadedData}
+                uploaderAddress={uploaderInfo}
                 onSigned={handleSignComplete}
               />
             )}

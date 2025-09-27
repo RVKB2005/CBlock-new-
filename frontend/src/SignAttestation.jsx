@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ethers } from 'ethers';
-import toast from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 import {
   DocumentCheckIcon,
   IdentificationIcon,
@@ -18,13 +18,14 @@ import {
 } from '@heroicons/react/24/outline';
 import CarbonABI from './abis/Carbon.json';
 
-export default function SignAttestation({ onSigned, uploadedData }) {
+export default function SignAttestation({ onSigned, uploadedData, uploaderAddress }) {
   const [formData, setFormData] = useState({
     gsProjectId: '',
     gsSerial: '',
     ipfsCid: '',
     amount: 1,
-    vintage: new Date().getFullYear()
+    vintage: new Date().getFullYear(),
+    recipient: '' // Add recipient field
   });
   const [isLoading, setIsLoading] = useState(false);
   const [walletAddress, setWalletAddress] = useState('');
@@ -32,18 +33,32 @@ export default function SignAttestation({ onSigned, uploadedData }) {
   const [isWalletConnected, setIsWalletConnected] = useState(false);
   const [isVerifier, setIsVerifier] = useState(false);
   const [checkingVerifier, setCheckingVerifier] = useState(false);
-  
+
   // Auto-populate IPFS CID and file info when file is uploaded
   useEffect(() => {
     if (uploadedData && uploadedData.cid) {
-      setFormData(prev => ({ ...prev, ipfsCid: uploadedData.cid }));
+      setFormData(prev => ({
+        ...prev,
+        ipfsCid: uploadedData.cid,
+        recipient: uploaderAddress || '' // Auto-populate recipient with uploader address
+      }));
     }
-  }, [uploadedData]);
+  }, [uploadedData, uploaderAddress]);
 
   // Check wallet connection on component mount
   useEffect(() => {
     checkWalletConnection();
   }, []);
+
+  // Auto-fill recipient address when wallet connects
+  useEffect(() => {
+    if (walletAddress && !formData.recipient) {
+      setFormData(prev => ({
+        ...prev,
+        recipient: walletAddress
+      }));
+    }
+  }, [walletAddress, formData.recipient]);
 
   const checkWalletConnection = async () => {
     if (window.ethereum) {
@@ -52,6 +67,11 @@ export default function SignAttestation({ onSigned, uploadedData }) {
         if (accounts.length > 0) {
           setWalletAddress(accounts[0]);
           setIsWalletConnected(true);
+          // Auto-fill recipient address with connected wallet
+          setFormData(prev => ({
+            ...prev,
+            recipient: accounts[0]
+          }));
           await checkVerifierStatus(accounts[0]);
         }
       } catch (error) {
@@ -62,12 +82,12 @@ export default function SignAttestation({ onSigned, uploadedData }) {
 
   const checkVerifierStatus = async (address) => {
     if (!address) return;
-    
+
     setCheckingVerifier(true);
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const verifierRegistryAddress = import.meta.env.VITE_CONTRACT_VERIFIER_REGISTRY_ADDRESS;
-      
+
       if (!verifierRegistryAddress) {
         console.warn('Verifier registry address not found');
         return;
@@ -78,20 +98,34 @@ export default function SignAttestation({ onSigned, uploadedData }) {
         "function isVerifier(address account) external view returns (bool)",
         "function addVerifier(address verifier) external"
       ];
-      
+
       const verifierRegistry = new ethers.Contract(verifierRegistryAddress, verifierABI, provider);
       const isRegisteredVerifier = await verifierRegistry.isVerifier(address);
-      
+
       setIsVerifier(isRegisteredVerifier);
-      
+
       if (isRegisteredVerifier) {
         toast.success('✅ You are registered as a verifier!');
       } else {
-        toast.warning('⚠️ You are not registered as a verifier. You can register yourself for testing.');
+        // Using toast.warning() for warning messages
+        toast.warning('You are not registered as a verifier. You can register yourself for testing.', {
+          icon: '⚠️',
+          style: {
+            background: '#fff3cd',
+            color: '#856404',
+            border: '1px solid #ffeeba',
+          },
+        });
       }
     } catch (error) {
       console.error('Error checking verifier status:', error);
-      toast.error('Could not check verifier status');
+      toast.error('Could not check verifier status', {
+        style: {
+          background: '#f8d7da',
+          color: '#721c24',
+          border: '1px solid #f5c6cb',
+        },
+      });
     } finally {
       setCheckingVerifier(false);
     }
@@ -108,27 +142,27 @@ export default function SignAttestation({ onSigned, uploadedData }) {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const verifierRegistryAddress = import.meta.env.VITE_CONTRACT_VERIFIER_REGISTRY_ADDRESS;
-      
+
       const verifierABI = [
         "function isVerifier(address account) external view returns (bool)",
         "function addVerifier(address verifier) external"
       ];
-      
+
       const verifierRegistry = new ethers.Contract(verifierRegistryAddress, verifierABI, signer);
-      
+
       toast.loading('Registering as verifier...', { id: 'registering' });
-      
+
       const tx = await verifierRegistry.addVerifier(walletAddress);
       await tx.wait();
-      
+
       toast.dismiss('registering');
       toast.success('🎉 Successfully registered as a verifier!');
-      
+
       setIsVerifier(true);
     } catch (error) {
       console.error('Error registering as verifier:', error);
       toast.dismiss('registering');
-      
+
       let errorMessage = 'Failed to register as verifier: ';
       if (error.message.includes('user rejected')) {
         errorMessage = 'Registration was cancelled by user.';
@@ -137,7 +171,7 @@ export default function SignAttestation({ onSigned, uploadedData }) {
       } else {
         errorMessage += error.message || 'Unknown error occurred';
       }
-      
+
       toast.error(errorMessage);
     } finally {
       setCheckingVerifier(false);
@@ -156,6 +190,11 @@ export default function SignAttestation({ onSigned, uploadedData }) {
       if (accounts.length > 0) {
         setWalletAddress(accounts[0]);
         setIsWalletConnected(true);
+        // Auto-fill recipient address with connected wallet
+        setFormData(prev => ({
+          ...prev,
+          recipient: accounts[0]
+        }));
         toast.success('Wallet connected successfully!');
         // Check verifier status after connecting
         await checkVerifierStatus(accounts[0]);
@@ -168,80 +207,91 @@ export default function SignAttestation({ onSigned, uploadedData }) {
 
   const validateForm = () => {
     const errors = {};
-    
+
     if (!formData.gsProjectId.trim()) {
       errors.gsProjectId = 'Project ID is required';
     } else if (!/^[A-Z]{2,3}-\d{3,6}$/i.test(formData.gsProjectId.trim())) {
       errors.gsProjectId = 'Project ID format should be like "GS-1234" or "VCS-12345"';
     }
-    
+
     if (!formData.gsSerial.trim()) {
       errors.gsSerial = 'Serial number is required';
     } else if (formData.gsSerial.trim().length < 5) {
       errors.gsSerial = 'Serial number should be at least 5 characters';
     }
-    
+
     if (!formData.ipfsCid.trim()) {
       errors.ipfsCid = 'IPFS CID is required (upload a file first)';
     }
-    
+
     if (!formData.amount || formData.amount <= 0) {
       errors.amount = 'Amount must be greater than 0';
+    } else if (formData.amount % 1 !== 0) {
+      errors.amount = 'Amount must be a whole number (no decimals)';
     } else if (formData.amount > 1000000) {
       errors.amount = 'Amount seems too large (max: 1,000,000)';
     }
-    
+
     if (!formData.vintage || formData.vintage < 2000 || formData.vintage > new Date().getFullYear() + 1) {
       errors.vintage = 'Please enter a valid vintage year';
     }
-    
+
+    if (!formData.recipient.trim()) {
+      errors.recipient = 'Recipient address is required';
+    } else if (!/^0x[a-fA-F0-9]{40}$/.test(formData.recipient.trim())) {
+      errors.recipient = 'Please enter a valid Ethereum address';
+    }
+
     if (!isWalletConnected) {
       errors.wallet = 'Please connect your wallet first';
     }
-    
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleInputChange = React.useCallback((field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    
-    // Clear validation error when user starts typing
-    setValidationErrors(prev => {
-      if (prev[field]) {
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+
+    // Clear validation error for this field
+    if (validationErrors[name]) {
+      setValidationErrors(prev => {
         const newErrors = { ...prev };
-        delete newErrors[field];
+        delete newErrors[name];
         return newErrors;
-      }
-      return prev;
-    });
-  }, []);
+      });
+    }
+  };
 
   async function sign() {
     if (!validateForm()) {
       toast.error('Please fix the validation errors before proceeding');
       return;
     }
-    
+
     setIsLoading(true);
-    
+
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const address = await signer.getAddress();
-      
+
       const carbonAddress = import.meta.env.VITE_CONTRACT_CARBON_ADDRESS;
       if (!carbonAddress) {
         toast.error('Smart contract not deployed. Please check your configuration.');
         return;
       }
-      
+
       // Create carbon contract instance
       const carbon = new ethers.Contract(carbonAddress, CarbonABI, signer);
 
       const network = await provider.getNetwork();
       const chainId = network.chainId;
-      
+
       const domain = {
         name: 'CarbonCredit',
         version: '1',
@@ -260,8 +310,9 @@ export default function SignAttestation({ onSigned, uploadedData }) {
         ]
       };
 
-      // Get the actual recipient (minter) address and their nonce
-      const recipient = address; // The person signing will be the recipient
+      // Get the actual recipient (project owner) address and their nonce
+      // The signer (verifier) signs for the recipient (project owner)
+      const recipient = formData.recipient.trim(); // Use the recipient from the form
       let nonce;
       try {
         nonce = Number(await carbon.nonces(recipient));
@@ -271,38 +322,42 @@ export default function SignAttestation({ onSigned, uploadedData }) {
         return;
       }
 
+      // Convert amount to BigInt (no decimals, just whole numbers for carbon credits)
+      const amountBigInt = BigInt(Math.floor(Number(formData.amount)));
+
       const attestationValue = {
         gsProjectId: formData.gsProjectId.trim(),
         gsSerial: formData.gsSerial.trim(),
         ipfsCid: formData.ipfsCid.trim(),
-        amount: Number(formData.amount),
+        amount: amountBigInt,
         recipient,
         nonce
       };
 
       // Use the modern signTypedData method
       toast.loading('Please sign the attestation in your wallet...', { id: 'signing' });
-      
+
       const signature = await signer.signTypedData(domain, types, attestationValue);
-      
+
       toast.dismiss('signing');
       toast.success('🎉 Attestation signed successfully!');
-      
+
       // Include additional data for the mint step
-      onSigned({ 
-        signature, 
-        payload: { 
-          ...attestationValue, 
-          vintage: formData.vintage 
-        }, 
+      onSigned({
+        signature,
+        payload: {
+          ...attestationValue,
+          quantity: Number(formData.amount), // Add quantity for Mint component
+          vintage: formData.vintage
+        },
         signer: address,
-        nonce 
+        nonce
       });
-      
+
     } catch (error) {
       console.error('Signing error:', error);
       toast.dismiss('signing');
-      
+
       let errorMessage = 'Error signing attestation: ';
       if (error.message.includes('user rejected')) {
         errorMessage = 'Attestation signing was cancelled by user.';
@@ -311,49 +366,13 @@ export default function SignAttestation({ onSigned, uploadedData }) {
       } else {
         errorMessage += error.message || 'Unknown error occurred';
       }
-      
+
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
   }
 
-  // Simple input field component without complex memoization to fix focus issues
-  const InputField = ({ label, field, type = 'text', placeholder, icon: Icon, suffix, ...props }) => {
-    return (
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-carbon-700">
-          {Icon && <Icon className="w-4 h-4 inline mr-2" />}
-          {label}
-        </label>
-        <div className="relative">
-          <input
-            type={type}
-            placeholder={placeholder}
-            value={formData[field] || ''}
-            onChange={(e) => handleInputChange(field, e.target.value)}
-            className={`input-field ${suffix ? 'pr-16' : ''} ${
-              validationErrors[field] ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : ''
-            }`}
-            autoComplete="off"
-            spellCheck="false"
-            {...props}
-          />
-          {suffix && (
-            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-              <span className="text-carbon-500 text-sm">{suffix}</span>
-            </div>
-          )}
-        </div>
-        {validationErrors[field] && (
-          <p className="mt-1 text-sm text-red-600 flex items-center">
-            <ExclamationTriangleIcon className="w-4 h-4 mr-1" />
-            {validationErrors[field]}
-          </p>
-        )}
-      </div>
-    );
-  };
 
   return (
     <motion.div
@@ -464,39 +483,34 @@ export default function SignAttestation({ onSigned, uploadedData }) {
           </div>
 
           {/* Verifier Status */}
-          <div className={`border rounded-lg p-4 ${
-            isVerifier 
-              ? 'bg-green-50 border-green-200'
-              : 'bg-orange-50 border-orange-200'
-          }`}>
+          <div className={`border rounded-lg p-4 ${isVerifier
+            ? 'bg-green-50 border-green-200'
+            : 'bg-orange-50 border-orange-200'
+            }`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                  isVerifier
-                    ? 'bg-green-100'
-                    : 'bg-orange-100'
-                }`}>
-                  <ShieldCheckIcon className={`w-5 h-5 ${
-                    isVerifier ? 'text-green-600' : 'text-orange-600'
-                  }`} />
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isVerifier
+                  ? 'bg-green-100'
+                  : 'bg-orange-100'
+                  }`}>
+                  <ShieldCheckIcon className={`w-5 h-5 ${isVerifier ? 'text-green-600' : 'text-orange-600'
+                    }`} />
                 </div>
                 <div>
-                  <p className={`font-medium ${
-                    isVerifier ? 'text-green-900' : 'text-orange-900'
-                  }`}>
+                  <p className={`font-medium ${isVerifier ? 'text-green-900' : 'text-orange-900'
+                    }`}>
                     {isVerifier ? 'Registered Verifier' : 'Not Registered'}
                   </p>
-                  <p className={`text-sm ${
-                    isVerifier ? 'text-green-700' : 'text-orange-700'
-                  }`}>
-                    {isVerifier 
+                  <p className={`text-sm ${isVerifier ? 'text-green-700' : 'text-orange-700'
+                    }`}>
+                    {isVerifier
                       ? 'You can sign attestations for carbon credits'
                       : 'Register your wallet to become a verifier for testing'
                     }
                   </p>
                 </div>
               </div>
-              
+
               <div className="flex space-x-2">
                 {!isVerifier && (
                   <>
@@ -519,7 +533,7 @@ export default function SignAttestation({ onSigned, uploadedData }) {
                         </>
                       )}
                     </motion.button>
-                    
+
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
@@ -542,7 +556,7 @@ export default function SignAttestation({ onSigned, uploadedData }) {
                 )}
               </div>
             </div>
-            
+
             {!isVerifier && (
               <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-start space-x-2">
@@ -560,49 +574,156 @@ export default function SignAttestation({ onSigned, uploadedData }) {
 
       {/* Attestation Form */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <InputField
-          label="Project ID"
-          field="gsProjectId"
-          placeholder="GS-1234 or VCS-12345"
-          icon={IdentificationIcon}
-        />
-        
-        <InputField
-          label="Serial Number"
-          field="gsSerial"
-          placeholder="ABC-123-456-789"
-          icon={HashtagIcon}
-        />
-        
-        <InputField
-          label="Vintage Year"
-          field="vintage"
-          type="number"
-          placeholder="2023"
-          min="2000"
-          max={new Date().getFullYear() + 1}
-          icon={DocumentCheckIcon}
-        />
-        
-        <InputField
-          label="Credit Amount"
-          field="amount"
-          type="number"
-          placeholder="100"
-          min="1"
-          step="0.01"
-          suffix="CO2e tons"
-          icon={CubeIcon}
-        />
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-carbon-700">
+            <IdentificationIcon className="w-4 h-4 inline mr-2" />
+            Project ID
+          </label>
+          <input
+            type="text"
+            name="gsProjectId"
+            value={formData.gsProjectId || ''}
+            onChange={handleInputChange}
+            placeholder="GS-1234 or VCS-12345"
+            className={`input-field ${validationErrors.gsProjectId ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : ''}`}
+          />
+          {validationErrors.gsProjectId && (
+            <p className="mt-1 text-sm text-red-600 flex items-center">
+              <ExclamationTriangleIcon className="w-4 h-4 mr-1" />
+              {validationErrors.gsProjectId}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-carbon-700">
+            <HashtagIcon className="w-4 h-4 inline mr-2" />
+            Serial Number
+          </label>
+          <input
+            type="text"
+            name="gsSerial"
+            value={formData.gsSerial || ''}
+            onChange={handleInputChange}
+            placeholder="ABC-123-456-789"
+            className={`input-field ${validationErrors.gsSerial ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : ''}`}
+          />
+          {validationErrors.gsSerial && (
+            <p className="mt-1 text-sm text-red-600 flex items-center">
+              <ExclamationTriangleIcon className="w-4 h-4 mr-1" />
+              {validationErrors.gsSerial}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-carbon-700">
+            <DocumentCheckIcon className="w-4 h-4 inline mr-2" />
+            Vintage Year
+          </label>
+          <input
+            type="number"
+            name="vintage"
+            value={formData.vintage || ''}
+            onChange={handleInputChange}
+            placeholder="2023"
+            min="2000"
+            max={new Date().getFullYear() + 1}
+            className={`input-field ${validationErrors.vintage ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : ''}`}
+          />
+          {validationErrors.vintage && (
+            <p className="mt-1 text-sm text-red-600 flex items-center">
+              <ExclamationTriangleIcon className="w-4 h-4 mr-1" />
+              {validationErrors.vintage}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-carbon-700">
+            <CubeIcon className="w-4 h-4 inline mr-2" />
+            Credit Amount
+          </label>
+          <div className="relative">
+            <input
+              type="number"
+              name="amount"
+              value={formData.amount || ''}
+              onChange={handleInputChange}
+              placeholder="100"
+              min="1"
+              step="1"
+              className={`input-field pr-16 ${validationErrors.amount ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : ''}`}
+            />
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+              <span className="text-carbon-500 text-sm">CO2e tons</span>
+            </div>
+          </div>
+          {validationErrors.amount && (
+            <p className="mt-1 text-sm text-red-600 flex items-center">
+              <ExclamationTriangleIcon className="w-4 h-4 mr-1" />
+              {validationErrors.amount}
+            </p>
+          )}
+        </div>
       </div>
-      
-      <InputField
-        label="IPFS Document CID"
-        field="ipfsCid"
-        placeholder="QmXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxX"
-        icon={ClipboardDocumentCheckIcon}
-        readOnly={!!uploadedData?.cid}
-      />
+
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-carbon-700">
+          <ClipboardDocumentCheckIcon className="w-4 h-4 inline mr-2" />
+          IPFS Document CID
+        </label>
+        <input
+          type="text"
+          name="ipfsCid"
+          value={formData.ipfsCid || ''}
+          onChange={handleInputChange}
+          placeholder="QmXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxX"
+          readOnly={!!uploadedData?.cid}
+          className="input-field"
+        />
+        {validationErrors.ipfsCid && (
+          <p className="mt-1 text-sm text-red-600 flex items-center">
+            <ExclamationTriangleIcon className="w-4 h-4 mr-1" />
+            {validationErrors.ipfsCid}
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-carbon-700">
+          <WalletIcon className="w-4 h-4 inline mr-2" />
+          Recipient Address (Project Owner)
+        </label>
+        <input
+          type="text"
+          name="recipient"
+          value={formData.recipient || ''}
+          onChange={handleInputChange}
+          placeholder="0x742d35Cc6634C0532925a3b8D4C9db96590c6C87"
+          className={`input-field ${validationErrors.recipient ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : ''}`}
+        />
+        {validationErrors.recipient && (
+          <p className="mt-1 text-sm text-red-600 flex items-center">
+            <ExclamationTriangleIcon className="w-4 h-4 mr-1" />
+            {validationErrors.recipient}
+          </p>
+        )}
+        <p className="text-xs text-carbon-600">
+          The Ethereum address that will receive the carbon credits (usually the project owner)
+        </p>
+      </div>
+
+      {/* Access Restriction Message */}
+      {!isVerifier && !checkingVerifier && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <div className="flex items-center space-x-3">
+            <ExclamationTriangleIcon className="w-5 h-5 text-red-600" />
+            <p className="text-red-800 font-medium">Access Restricted</p>
+          </div>
+          <p className="text-red-700 mt-1">Only registered verifiers can sign carbon credit attestations. Please register as a verifier or use demo mode to test the functionality.</p>
+        </div>
+      )}
 
       {/* Action Buttons */}
       <div className="flex space-x-4 pt-4">
@@ -610,7 +731,7 @@ export default function SignAttestation({ onSigned, uploadedData }) {
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={sign}
-          disabled={isLoading || !isWalletConnected}
+          disabled={isLoading || !isWalletConnected || !isVerifier}
           className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
         >
           {isLoading ? (
@@ -625,7 +746,7 @@ export default function SignAttestation({ onSigned, uploadedData }) {
             </>
           )}
         </motion.button>
-        
+
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
@@ -635,7 +756,8 @@ export default function SignAttestation({ onSigned, uploadedData }) {
               gsSerial: '',
               ipfsCid: uploadedData?.cid || '',
               amount: 1,
-              vintage: new Date().getFullYear()
+              vintage: new Date().getFullYear(),
+              recipient: walletAddress || uploaderAddress || ''
             });
             setValidationErrors({});
           }}
@@ -645,7 +767,7 @@ export default function SignAttestation({ onSigned, uploadedData }) {
           Reset Form
         </motion.button>
       </div>
-      
+
       {/* EIP-712 Info */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}

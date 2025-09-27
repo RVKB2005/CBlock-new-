@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ethers } from 'ethers';
 import toast from 'react-hot-toast';
-import { 
-  CheckCircleIcon, 
-  ExclamationTriangleIcon, 
+import {
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
   ArrowPathIcon,
   DocumentCheckIcon,
   SparklesIcon,
@@ -31,7 +31,7 @@ export default function Mint({ signedData }) {
   const [transactionHash, setTransactionHash] = useState('');
   const [validationErrors, setValidationErrors] = useState({});
   const [isDemoMode, setIsDemoMode] = useState(false);
-  
+
   // Auto-populate fields when attestation is signed
   useEffect(() => {
     if (signedData && signedData.payload) {
@@ -45,7 +45,7 @@ export default function Mint({ signedData }) {
         recipient: recipient || ''
       });
       setSignature(signedData.signature || '');
-      setNonce(signedData.nonce || '');
+      setNonce(signedData.nonce !== undefined ? signedData.nonce : '');
     }
   }, [signedData]);
 
@@ -68,7 +68,7 @@ export default function Mint({ signedData }) {
 
   const validateForm = () => {
     const errors = {};
-    
+
     if (!formData.gsProjectId.trim()) errors.gsProjectId = 'Project ID is required';
     if (!formData.gsSerial.trim()) errors.gsSerial = 'Serial number is required';
     if (!formData.vintage || formData.vintage < 2000) errors.vintage = 'Valid vintage year is required';
@@ -76,12 +76,12 @@ export default function Mint({ signedData }) {
     if (!formData.ipfsHash.trim()) errors.ipfsHash = 'IPFS hash is required';
     if (!formData.recipient.trim()) errors.recipient = 'Recipient address is required';
     if (!signature.trim()) errors.signature = 'Verifier signature is required';
-    
+
     // Validate Ethereum address format
     if (formData.recipient && !ethers.isAddress(formData.recipient)) {
       errors.recipient = 'Invalid Ethereum address format';
     }
-    
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -96,7 +96,7 @@ export default function Mint({ signedData }) {
 
   const generateDemoSignature = () => {
     // Generate a realistic-looking demo signature
-    const demoSig = '0x' + Array.from({length: 130}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    const demoSig = '0x' + Array.from({ length: 130 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
     setSignature(demoSig);
     toast.success('🎭 Demo signature generated! Ready for demo minting.');
     setValidationErrors(prev => ({ ...prev, signature: '' }));
@@ -110,29 +110,29 @@ export default function Mint({ signedData }) {
 
     setIsLoading(true);
     setTransactionStatus('pending');
-    
+
     try {
       toast.loading('🎭 Demo Mode: Simulating carbon credit minting...', { id: 'demo-mint' });
-      
+
       // Simulate processing time
       await new Promise(resolve => setTimeout(resolve, 3000));
-      
+
       // Generate fake transaction hash
-      const fakeHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
-      
+      const fakeHash = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
       setTransactionHash(fakeHash);
       setTransactionStatus('confirmed');
-      
+
       toast.dismiss('demo-mint');
       toast.success(`🎉 Demo Mode: Carbon credits minted successfully!\n${formData.quantity} CO2e tons minted to ${formData.recipient}`);
-      
+
       // Reset form after successful demo mint
       setTimeout(() => {
         if (window.confirm('Demo carbon credits minted successfully! Would you like to mint more credits?')) {
           resetForm();
         }
       }, 3000);
-      
+
     } catch (error) {
       console.error('Demo mint error:', error);
       setTransactionStatus('error');
@@ -153,10 +153,10 @@ export default function Mint({ signedData }) {
       toast.error('Please install MetaMask to mint carbon credits');
       return;
     }
-    
+
     setIsLoading(true);
     setTransactionStatus(null);
-    
+
     try {
       // Initialize blockchain service if needed
       if (!blockchainService.isInitialized) {
@@ -166,18 +166,45 @@ export default function Mint({ signedData }) {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const carbonAddress = import.meta.env.VITE_CONTRACT_CARBON_ADDRESS;
-      
+
       if (!carbonAddress || carbonAddress === '0x0000000000000000000000000000000000000000') {
         toast.error('Smart contract not deployed. Please check your configuration.');
         return;
       }
-      
+
       const carbon = new ethers.Contract(carbonAddress, CarbonABI, signer);
 
       // Prepare the data according to the ABI signature
-      console.log('Using signature:', signature);
-      console.log('Form data:', formData);
-      
+      console.log('🔍 Debug Info:');
+      console.log('- Signature:', signature);
+      console.log('- Form data:', formData);
+      console.log('- Signer address:', await signer.getAddress());
+
+      // Check if the signer is a registered verifier
+      const verifierRegistryAddress = import.meta.env.VITE_CONTRACT_VERIFIER_REGISTRY_ADDRESS;
+      if (verifierRegistryAddress) {
+        const verifierABI = ["function isVerifier(address account) external view returns (bool)"];
+        const verifierRegistry = new ethers.Contract(verifierRegistryAddress, verifierABI, provider);
+        const signerAddress = await signer.getAddress();
+        const isVerifier = await verifierRegistry.isVerifier(signerAddress);
+        console.log('- Is signer a verifier?', isVerifier);
+
+        if (!isVerifier) {
+          toast.error('Current wallet is not registered as a verifier. Please switch to the verifier wallet or register this wallet as a verifier.');
+          return;
+        }
+      }
+
+      // Check current nonce for recipient
+      const currentNonce = await carbon.nonces(formData.recipient);
+      console.log('- Current nonce for recipient:', currentNonce.toString());
+      console.log('- Expected nonce:', nonce);
+
+      if (Number(currentNonce) !== nonce) {
+        toast.error(`Nonce mismatch! Expected ${nonce}, but contract has ${currentNonce}. Please sign the attestation again.`);
+        return;
+      }
+
       const tx = await carbon.mintWithAttestation(
         formData.gsProjectId,
         formData.gsSerial,
@@ -187,28 +214,28 @@ export default function Mint({ signedData }) {
         signature, // This should be the bytes signature from EIP-712
         { gasLimit: 500000 } // Fixed: Add gas limit to prevent estimation issues
       );
-      
+
       setTransactionHash(tx.hash);
       setTransactionStatus('pending');
       toast.success(`Transaction submitted! Hash: ${tx.hash}`);
-      
+
       // Wait for confirmation
       const receipt = await tx.wait();
-      
+
       setTransactionStatus('confirmed');
       toast.success(`✅ Carbon credits minted successfully!\nBlock: ${receipt.blockNumber}`);
-      
+
       // Reset form after successful mint with delay
       setTimeout(() => {
         if (window.confirm('Carbon credits minted successfully! Would you like to mint more credits?')) {
           resetForm();
         }
       }, 3000);
-      
+
     } catch (error) {
       console.error('Minting error:', error);
       setTransactionStatus('error');
-      
+
       let errorMessage = 'Error minting carbon credits: ';
       if (error.message.includes('attestation not signed by registered verifier')) {
         errorMessage = 'The signature is not from a registered verifier. Please ensure the attestation is signed by an authorized verifier.';
@@ -221,7 +248,7 @@ export default function Mint({ signedData }) {
       } else {
         errorMessage += error.reason || error.message || 'Unknown error occurred';
       }
-      
+
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
@@ -318,13 +345,13 @@ export default function Mint({ signedData }) {
           placeholder="GS-1234"
           icon={DocumentCheckIcon}
         />
-        
+
         <InputField
           label="Serial Number"
           field="gsSerial"
           placeholder="ABC-123-456"
         />
-        
+
         <InputField
           label="Vintage Year"
           field="vintage"
@@ -333,7 +360,7 @@ export default function Mint({ signedData }) {
           min="2000"
           max={new Date().getFullYear() + 1}
         />
-        
+
         <InputField
           label="Quantity (CO2e tons)"
           field="quantity"
@@ -343,13 +370,13 @@ export default function Mint({ signedData }) {
           step="0.01"
         />
       </div>
-      
+
       <InputField
         label="IPFS Document Hash"
         field="ipfsHash"
         placeholder="QmXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxX"
       />
-      
+
       <InputField
         label="Recipient Address"
         field="recipient"
@@ -384,7 +411,7 @@ export default function Mint({ signedData }) {
             {validationErrors.signature}
           </motion.p>
         )}
-        
+
         {/* Demo Helper */}
         {!signature && (
           <motion.div
@@ -421,32 +448,29 @@ export default function Mint({ signedData }) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className={`p-4 rounded-lg border ${
-              transactionStatus === 'pending' ? 'bg-yellow-50 border-yellow-200' :
+            className={`p-4 rounded-lg border ${transactionStatus === 'pending' ? 'bg-yellow-50 border-yellow-200' :
               transactionStatus === 'confirmed' ? 'bg-green-50 border-green-200' :
-              'bg-red-50 border-red-200'
-            }`}
+                'bg-red-50 border-red-200'
+              }`}
           >
             <div className="flex items-center space-x-3">
               {transactionStatus === 'pending' && <ArrowPathIcon className="w-5 h-5 text-yellow-600 animate-spin" />}
               {transactionStatus === 'confirmed' && <CheckCircleIcon className="w-5 h-5 text-green-600" />}
               {transactionStatus === 'error' && <ExclamationTriangleIcon className="w-5 h-5 text-red-600" />}
               <div>
-                <p className={`font-medium ${
-                  transactionStatus === 'pending' ? 'text-yellow-900' :
+                <p className={`font-medium ${transactionStatus === 'pending' ? 'text-yellow-900' :
                   transactionStatus === 'confirmed' ? 'text-green-900' :
-                  'text-red-900'
-                }`}>
+                    'text-red-900'
+                  }`}>
                   {transactionStatus === 'pending' && 'Transaction Pending...'}
                   {transactionStatus === 'confirmed' && 'Carbon Credits Minted Successfully!'}
                   {transactionStatus === 'error' && 'Transaction Failed'}
                 </p>
                 {transactionHash && (
-                  <p className={`text-sm mt-1 ${
-                    transactionStatus === 'pending' ? 'text-yellow-700' :
+                  <p className={`text-sm mt-1 ${transactionStatus === 'pending' ? 'text-yellow-700' :
                     transactionStatus === 'confirmed' ? 'text-green-700' :
-                    'text-red-700'
-                  }`}>
+                      'text-red-700'
+                    }`}>
                     Transaction Hash: <code className="font-mono text-xs">{transactionHash}</code>
                   </p>
                 )}
@@ -478,7 +502,7 @@ export default function Mint({ signedData }) {
               </>
             )}
           </motion.button>
-          
+
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -490,7 +514,7 @@ export default function Mint({ signedData }) {
             <span>Demo Mint</span>
           </motion.button>
         </div>
-        
+
         {/* Demo Info */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -506,7 +530,7 @@ export default function Mint({ signedData }) {
             </div>
           </div>
         </motion.div>
-        
+
         <div className="flex justify-center">
           <motion.button
             whileHover={{ scale: 1.02 }}

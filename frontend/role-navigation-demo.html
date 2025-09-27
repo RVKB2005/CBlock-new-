@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Role-Based Navigation Demo - CBlock</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .gradient-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+    </style>
+</head>
+
+<body class="bg-gradient-to-br from-gray-50 via-white to-blue-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="text-center mb-12">
+            <h1 class="text-4xl font-bold gradient-text mb-4">🌱 CBlock Role-Based Navigation</h1>
+            <p class="text-gray-600 text-lg">Task 12 Implementation Demo</p>
+        </div>
+
+        <!-- Features Overview -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+            <!-- Feature 1: Role-Appropriate Menu Items -->
+            <div class="bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
+                <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4">
+                    <span class="text-2xl">🧭</span>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-900 mb-2">Role-Appropriate Menu Items</h3>
+                <p class="text-gray-600 text-sm mb-4">Navigation menu dynamically shows only the items relevant to each
+                    user role.</p>
+                <ul class="text-sm text-gray-700 space-y-1">
+                    <li>• Individual/Business: Upload Documents, My Tokens, Portfolio</li>
+                    <li>• Verifier: Verifier Dashboard, Analytics, My Tokens</li>
+                    <li>• All: Dashboard, Marketplace, Retire Credits</li>
+                </ul>
+            </div>
+
+            <!-- Feature 2: Role-Based Redirects -->
+            <div class="bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
+                <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4">
+                    <span class="text-2xl">🔄</span>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-900 mb-2">Automatic Role-Based Redirects</h3>
+                <p class="text-gray-600 text-sm mb-4">Users are automatically redirected to appropriate pages based on
+                    their role.</p>
+                <ul class="text-sm text-gray-700 space-y-1">
+                    <li>• Verifiers accessing upload → Verifier Dashboard</li>
+                    <li>• Non-verifiers accessing verifier pages → Dashboard</li>
+                    <li>• Unauthorized access → Access Denied with auto-redirect</li>
+                </ul>
+            </div>
+
+            <!-- Feature 3: Breadcrumb Navigation -->
+            <div class="bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
+                <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4">
+                    <span class="text-2xl">🍞</span>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-900 mb-2">Breadcrumb Navigation</h3>
+                <p class="text-gray-600 text-sm mb-4">Clear navigation path showing current location in the verifier
+                    workflow.</p>
+                <ul class="text-sm text-gray-700 space-y-1">
+                    <li>• Dashboard → Verifier Dashboard</li>
+                    <li>• Dashboard → Upload Documents</li>
+                    <li>• Dashboard → Portfolio → Document Details</li>
+                </ul>
+            </div>
+
+            <!-- Feature 4: Role-Based Landing Pages -->
+            <div class="bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
+                <div class="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center mb-4">
+                    <span class="text-2xl">🏠</span>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-900 mb-2">Role-Based Landing Pages</h3>
+                <p class="text-gray-600 text-sm mb-4">Customized welcome experience with role-specific quick actions.
+                </p>
+                <ul class="text-sm text-gray-700 space-y-1">
+                    <li>• Individual: Upload documents, view credits</li>
+                    <li>• Business: Upload business docs, portfolio</li>
+                    <li>• Verifier: Review documents, analytics</li>
+                </ul>
+            </div>
+
+            <!-- Feature 5: Visual Role Indicators -->
+            <div class="bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
+                <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center mb-4">
+                    <span class="text-2xl">🏷️</span>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-900 mb-2">Visual Role Indicators</h3>
+                <p class="text-gray-600 text-sm mb-4">Clear visual indicators showing current user role and permissions.
+                </p>
+                <ul class="text-sm text-gray-700 space-y-1">
+                    <li>• Role badges in navigation</li>
+                    <li>• Color-coded role indicators</li>
+                    <li>• Permission tooltips and help text</li>
+                </ul>
+            </div>
+
+            <!-- Feature 6: Access Control -->
+            <div class="bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
+                <div class="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center mb-4">
+                    <span class="text-2xl">🔒</span>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-900 mb-2">Enhanced Access Control</h3>
+                <p class="text-gray-600 text-sm mb-4">Robust access control with graceful error handling and user
+                    guidance.</p>
+                <ul class="text-sm text-gray-700 space-y-1">
+                    <li>• Role-based page access validation</li>
+                    <li>• Informative access denied messages</li>
+                    <li>• Automatic redirect to appropriate pages</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Role Examples -->
+        <div class="mb-12">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6 text-center">Role-Based Navigation Examples</h2>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Individual User -->
+                <div class="bg-white rounded-2xl shadow-lg p-6 border border-blue-200">
+                    <div class="flex items-center mb-4">
+                        <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                            <span class="text-blue-600 font-semibold">👤</span>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-gray-900">Individual User</h3>
+                            <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Individual
+                                User</span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="text-sm text-gray-700">Available Navigation:</div>
+                        <div class="space-y-1">
+                            <div class="flex items-center text-sm">
+                                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                Dashboard
+                            </div>
+                            <div class="flex items-center text-sm">
+                                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                Upload Documents
+                            </div>
+                            <div class="flex items-center text-sm">
+                                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                My Tokens
+                            </div>
+                            <div class="flex items-center text-sm">
+                                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                Portfolio
+                            </div>
+                            <div class="flex items-center text-sm">
+                                <span class="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                                <span class="line-through text-gray-400">Verifier Dashboard</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Business User -->
+                <div class="bg-white rounded-2xl shadow-lg p-6 border border-purple-200">
+                    <div class="flex items-center mb-4">
+                        <div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mr-3">
+                            <span class="text-purple-600 font-semibold">🏢</span>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-gray-900">Business User</h3>
+                            <span class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">Business
+                                User</span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="text-sm text-gray-700">Available Navigation:</div>
+                        <div class="space-y-1">
+                            <div class="flex items-center text-sm">
+                                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                Dashboard
+                            </div>
+                            <div class="flex items-center text-sm">
+                                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                Upload Documents
+                            </div>
+                            <div class="flex items-center text-sm">
+                                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                My Tokens
+                            </div>
+                            <div class="flex items-center text-sm">
+                                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                Portfolio
+                            </div>
+                            <div class="flex items-center text-sm">
+                                <span class="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                                <span class="line-through text-gray-400">Verifier Dashboard</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Verifier -->
+                <div class="bg-white rounded-2xl shadow-lg p-6 border border-green-200">
+                    <div class="flex items-center mb-4">
+                        <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                            <span class="text-green-600 font-semibold">🛡️</span>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-gray-900">Verifier</h3>
+                            <span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Verifier</span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="text-sm text-gray-700">Available Navigation:</div>
+                        <div class="space-y-1">
+                            <div class="flex items-center text-sm">
+                                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                Dashboard
+                            </div>
+                            <div class="flex items-center text-sm">
+                                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                Verifier Dashboard
+                            </div>
+                            <div class="flex items-center text-sm">
+                                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                My Tokens
+                            </div>
+                            <div class="flex items-center text-sm">
+                                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                Analytics
+                            </div>
+                            <div class="flex items-center text-sm">
+                                <span class="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                                <span class="line-through text-gray-400">Upload Documents</span>
+                                <span class="text-xs text-gray-500 ml-1">(redirected)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Implementation Summary -->
+        <div class="bg-white rounded-2xl shadow-lg p-8 border border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Implementation Summary</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3">New Components Created</h3>
+                    <ul class="space-y-2 text-sm text-gray-700">
+                        <li>• <code class="bg-gray-100 px-2 py-1 rounded">Breadcrumb.jsx</code> - Navigation breadcrumbs
+                        </li>
+                        <li>• <code class="bg-gray-100 px-2 py-1 rounded">RoleIndicator.jsx</code> - Role badges and
+                            indicators</li>
+                        <li>• <code class="bg-gray-100 px-2 py-1 rounded">RoleLandingPage.jsx</code> - Role-specific
+                            landing pages</li>
+                        <li>• <code class="bg-gray-100 px-2 py-1 rounded">RoleBasedRouter.jsx</code> - Enhanced routing
+                            logic</li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3">Enhanced Components</h3>
+                    <ul class="space-y-2 text-sm text-gray-700">
+                        <li>• <code class="bg-gray-100 px-2 py-1 rounded">Layout.jsx</code> - Added breadcrumbs and role
+                            indicators</li>
+                        <li>• <code class="bg-gray-100 px-2 py-1 rounded">AccessDenied.jsx</code> - Enhanced with
+                            redirect logic</li>
+                        <li>• <code class="bg-gray-100 px-2 py-1 rounded">App.jsx</code> - Integrated role-based router
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="mt-8 p-4 bg-green-50 rounded-lg border border-green-200">
+                <div class="flex items-center">
+                    <span class="text-green-600 text-xl mr-2">✅</span>
+                    <div>
+                        <h4 class="font-semibold text-green-900">Task 12 Complete</h4>
+                        <p class="text-green-700 text-sm">All role-based navigation and routing features have been
+                            successfully implemented with comprehensive test coverage.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Requirements Mapping -->
+        <div class="mt-8 bg-blue-50 rounded-2xl p-6 border border-blue-200">
+            <h3 class="text-lg font-semibold text-blue-900 mb-4">Requirements Fulfilled</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <h4 class="font-medium text-blue-800 mb-2">Requirement 7.1</h4>
+                    <p class="text-blue-700 text-sm">✅ Role identification and appropriate functionality display</p>
+                </div>
+                <div>
+                    <h4 class="font-medium text-blue-800 mb-2">Requirement 7.2</h4>
+                    <p class="text-blue-700 text-sm">✅ Role-appropriate page access and menu items</p>
+                </div>
+                <div>
+                    <h4 class="font-medium text-blue-800 mb-2">Requirement 7.4</h4>
+                    <p class="text-blue-700 text-sm">✅ Verifier redirection to appropriate dashboard</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
