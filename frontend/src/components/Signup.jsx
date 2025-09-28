@@ -487,7 +487,7 @@ export default function Signup({ onShowAuth, onLogin }) {
               </div>
 
               {/* Social Signup */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="flex justify-center">
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
