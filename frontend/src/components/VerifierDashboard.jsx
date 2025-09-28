@@ -102,55 +102,55 @@ export default function VerifierDashboard() {
 
             console.log('📋 Loading documents for verifier dashboard...');
 
-            // Show loading notification for long operations
-            const loadingToastId = toastNotifications.loading(
-                'Loading documents for verification...',
-                {
-                    roleSpecific: true,
-                    operation: 'document_review'
-                }
-            );
-
             try {
-                // Fetch documents from service with retry logic
-                const fetchedDocuments = await retryService.executeWithRetry(
-                    () => documentService.getDocumentsForVerifier(),
-                    {
-                        maxRetries: 3,
-                        retryableErrors: ['NETWORK_ERROR', 'TIMEOUT_ERROR', 'SERVER_ERROR']
-                    }
-                );
+                // Fetch documents with optimized loading (no retry for faster initial load)
+                const fetchedDocuments = await documentService.getDocumentsForVerifier();
 
                 console.log(`📋 Loaded ${fetchedDocuments.length} documents`);
                 setDocuments(fetchedDocuments);
 
-                // Calculate statistics
+                // Calculate statistics efficiently
                 const newStats = {
                     total: fetchedDocuments.length,
-                    pending: fetchedDocuments.filter(doc => doc.status === DOCUMENT_STATUS.PENDING).length,
-                    attested: fetchedDocuments.filter(doc => doc.status === DOCUMENT_STATUS.ATTESTED).length,
-                    minted: fetchedDocuments.filter(doc => doc.status === DOCUMENT_STATUS.MINTED).length,
-                    rejected: fetchedDocuments.filter(doc => doc.status === DOCUMENT_STATUS.REJECTED).length,
+                    pending: 0,
+                    attested: 0,
+                    minted: 0,
+                    rejected: 0,
                 };
+
+                // Count statuses in single pass for better performance
+                fetchedDocuments.forEach(doc => {
+                    switch (doc.status) {
+                        case DOCUMENT_STATUS.PENDING:
+                            newStats.pending++;
+                            break;
+                        case DOCUMENT_STATUS.ATTESTED:
+                            newStats.attested++;
+                            break;
+                        case DOCUMENT_STATUS.MINTED:
+                            newStats.minted++;
+                            break;
+                        case DOCUMENT_STATUS.REJECTED:
+                            newStats.rejected++;
+                            break;
+                    }
+                });
+
                 setStats(newStats);
 
-                // Dismiss loading notification
-                toastNotifications.dismiss(loadingToastId);
-
-                // Show success notification if this is a refresh
+                // Show success notification only for manual refreshes
                 if (documents.length > 0) {
                     toastNotifications.success(
                         `Dashboard refreshed - ${fetchedDocuments.length} documents loaded`,
                         {
                             roleSpecific: true,
                             operation: 'dashboard_refresh',
-                            duration: 3000
+                            duration: 2000
                         }
                     );
                 }
 
             } catch (fetchError) {
-                toastNotifications.dismiss(loadingToastId);
                 throw fetchError;
             }
 
@@ -349,10 +349,131 @@ export default function VerifierDashboard() {
     }, [loadDocuments]);
 
     /**
+     * Handle document rejection from table row
+     */
+    const handleDocumentReject = useCallback(async (document, rejectionReason = '') => {
+        try {
+            console.log('❌ Rejecting document from table:', document.id);
+
+            // Update document status to rejected
+            await documentService.updateDocumentStatus(
+                document.id,
+                DOCUMENT_STATUS.REJECTED,
+                {
+                    rejectionReason: rejectionReason || 'Document rejected by verifier',
+                    rejectedAt: new Date().toISOString(),
+                    rejectedBy: authService.getCurrentUser()?.walletAddress,
+                    verifierName: authService.getCurrentUser()?.name,
+                }
+            );
+
+            toast.success('Document has been rejected successfully.');
+
+            // Refresh the document list
+            await loadDocuments();
+
+        } catch (error) {
+            console.error('❌ Failed to reject document:', error);
+            toast.error(`Failed to reject document: ${error.message}`);
+        }
+    }, [loadDocuments]);
+
+    /**
      * Refresh documents
      */
     const handleRefresh = useCallback(() => {
         loadDocuments();
+    }, [loadDocuments]);
+
+    /**
+     * Reset ALL data - documents, allocations, transactions, etc.
+     */
+    const handleResetAllData = useCallback(async () => {
+        const confirmed = window.confirm(
+            '⚠️ WARNING: This will permanently delete ALL system data including:\n\n' +
+            '• All uploaded documents\n' +
+            '• All credit allocations\n' +
+            '• All attestations\n' +
+            '• All transaction history\n\n' +
+            'This action cannot be undone. Are you sure you want to continue?'
+        );
+
+        if (!confirmed) return;
+
+        const confirmText = window.prompt('Type "RESET" to confirm data deletion:');
+        if (confirmText !== 'RESET') {
+            toast.error('Reset cancelled - confirmation text did not match');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            console.log('🗑️ VERIFIER RESETTING ALL DATA...');
+
+            // Import services
+            const { default: creditAllocationService } = await import('../services/creditAllocation.js');
+            const { default: documentService } = await import('../services/document.js');
+
+            // Reset credit allocations
+            const allocationsReset = creditAllocationService.resetAllData();
+            console.log('Credit allocations reset:', allocationsReset);
+
+            // Reset documents
+            const documentsReset = documentService.resetAllData();
+            console.log('Documents reset:', documentsReset);
+
+            // Clear any other localStorage items related to the app
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && (
+                    key.startsWith('cblock_') ||
+                    key.includes('carbon') ||
+                    key.includes('credit') ||
+                    key.includes('document') ||
+                    key.includes('allocation') ||
+                    key.includes('transaction')
+                )) {
+                    keysToRemove.push(key);
+                }
+            }
+
+            keysToRemove.forEach(key => {
+                localStorage.removeItem(key);
+                console.log(`Removed localStorage key: ${key}`);
+            });
+
+            // Clear documents state
+            setDocuments([]);
+            setFilteredDocuments([]);
+            setStats({
+                total: 0,
+                pending: 0,
+                attested: 0,
+                minted: 0,
+                rejected: 0,
+            });
+
+            // Reload fresh data (should be empty now)
+            await loadDocuments();
+
+            toast.success('🗑️ ALL DATA HAS BEEN RESET TO ZERO', {
+                duration: 8000,
+                style: {
+                    background: '#ef4444',
+                    color: 'white',
+                    fontWeight: 'bold'
+                }
+            });
+
+            console.log('✅ VERIFIER DATA RESET COMPLETED');
+
+        } catch (error) {
+            console.error('❌ Failed to reset all data:', error);
+            toast.error(`Failed to reset data: ${error.message}`);
+        } finally {
+            setLoading(false);
+        }
     }, [loadDocuments]);
 
     /**
@@ -422,13 +543,16 @@ export default function VerifierDashboard() {
                                 Review and verify documents submitted by users for carbon credit minting
                             </p>
                         </div>
-                        <button
-                            onClick={handleRefresh}
-                            className="btn-secondary inline-flex items-center space-x-2"
-                        >
-                            <ArrowPathIcon className="w-4 h-4" />
-                            <span>Refresh</span>
-                        </button>
+                        <div className="flex space-x-3">
+                            <button
+                                onClick={handleRefresh}
+                                className="btn-secondary inline-flex items-center space-x-2"
+                            >
+                                <ArrowPathIcon className="w-4 h-4" />
+                                <span>Refresh</span>
+                            </button>
+
+                        </div>
                     </div>
 
                     {/* Statistics Cards */}
@@ -625,6 +749,7 @@ export default function VerifierDashboard() {
                                                 index={index}
                                                 onSelect={handleDocumentSelect}
                                                 onMint={handleMinting}
+                                                onReject={handleDocumentReject}
                                             />
                                         ))}
                                     </tbody>
@@ -693,7 +818,7 @@ function StatCard({ title, value, icon: Icon, color }) {
 /**
  * Document Row Component
  */
-function DocumentRow({ document, index, onSelect, onMint }) {
+function DocumentRow({ document, index, onSelect, onMint, onReject }) {
     const getStatusBadge = (status) => {
         const statusConfig = {
             [DOCUMENT_STATUS.PENDING]: {
@@ -816,6 +941,24 @@ function DocumentRow({ document, index, onSelect, onMint }) {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                             </svg>
                             <span>Mint</span>
+                        </button>
+                    )}
+
+                    {/* Quick Reject Button for Pending Documents */}
+                    {document.status === DOCUMENT_STATUS.PENDING && onReject && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                const reason = prompt('Please provide a reason for rejection (optional):');
+                                if (reason !== null) { // User didn't cancel
+                                    onReject(document, reason);
+                                }
+                            }}
+                            className="inline-flex items-center space-x-1 px-3 py-1 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Reject this Document"
+                        >
+                            <XCircleIcon className="w-4 h-4" />
+                            <span>Reject</span>
                         </button>
                     )}
                 </div>
@@ -972,7 +1115,8 @@ function DocumentDetailsModal({ document, onClose, onDocumentUpdate }) {
             });
 
             // Update document with minting information
-            await documentService.updateDocumentMinting(document.id, {
+            console.log('📝 Updating document status to MINTED for manual minting, document:', document.id);
+            const updatedDoc = await documentService.updateDocumentMinting(document.id, {
                 transactionHash: mintingResult.receipt?.hash,
                 mintedAt: new Date().toISOString(),
                 mintedBy: await blockchainService.getCurrentAddress(),
@@ -980,6 +1124,7 @@ function DocumentDetailsModal({ document, onClose, onDocumentUpdate }) {
                 recipient: attestationData.recipient,
                 tokenId: mintingResult.tokenId
             });
+            console.log('✅ Manual minting - Document status updated to:', updatedDoc.status);
 
             // Refresh documents
             if (onDocumentUpdate) {
@@ -1125,7 +1270,8 @@ function DocumentDetailsModal({ document, onClose, onDocumentUpdate }) {
                 });
 
                 // Update document with minting information
-                await documentService.updateDocumentMinting(document.id, {
+                console.log('📝 Updating document status to MINTED for document:', document.id);
+                const updatedDoc = await documentService.updateDocumentMinting(document.id, {
                     transactionHash: mintingResult.receipt?.hash,
                     mintedAt: new Date().toISOString(),
                     mintedBy: await blockchainService.getCurrentAddress(),
@@ -1133,6 +1279,7 @@ function DocumentDetailsModal({ document, onClose, onDocumentUpdate }) {
                     recipient: signedAttestationData.recipient,
                     tokenId: mintingResult.tokenId
                 });
+                console.log('✅ Document status updated to:', updatedDoc.status);
 
             } catch (mintingError) {
                 console.error('❌ Minting failed after attestation:', mintingError);
@@ -1155,6 +1302,41 @@ function DocumentDetailsModal({ document, onClose, onDocumentUpdate }) {
             toast.error(`Attestation failed: ${error.message}`);
         } finally {
             setIsAttesting(false);
+        }
+    };
+
+    /**
+     * Handle document rejection
+     */
+    const handleRejectDocument = async (rejectionReason = '') => {
+        try {
+            console.log('❌ Rejecting document:', document.id);
+
+            // Update document status to rejected
+            await documentService.updateDocumentStatus(
+                document.id,
+                DOCUMENT_STATUS.REJECTED,
+                {
+                    rejectionReason: rejectionReason || 'Document rejected by verifier',
+                    rejectedAt: new Date().toISOString(),
+                    rejectedBy: authService.getCurrentUser()?.walletAddress,
+                    verifierName: authService.getCurrentUser()?.name,
+                }
+            );
+
+            toast.success('Document has been rejected successfully.');
+
+            // Refresh the document list
+            if (onDocumentUpdate) {
+                onDocumentUpdate();
+            }
+
+            // Close the modal
+            onClose();
+
+        } catch (error) {
+            console.error('❌ Failed to reject document:', error);
+            toast.error(`Failed to reject document: ${error.message}`);
         }
     };
 
@@ -1296,6 +1478,18 @@ function DocumentDetailsModal({ document, onClose, onDocumentUpdate }) {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Rejection Information */}
+                            {isRejected && (
+                                <div>
+                                    <h3 className="font-semibold text-carbon-900 mb-2">Rejection Information</h3>
+                                    <div className="bg-red-50 rounded-lg p-4 space-y-2">
+                                        <p><span className="font-medium">Rejected By:</span> {document.verifierName || 'Unknown Verifier'}</p>
+                                        <p><span className="font-medium">Rejected At:</span> {document.rejectedAt ? new Date(document.rejectedAt).toLocaleString() : 'Unknown'}</p>
+                                        <p><span className="font-medium">Reason:</span> {document.rejectionReason || 'No reason provided'}</p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Attestation Form */}
@@ -1307,12 +1501,25 @@ function DocumentDetailsModal({ document, onClose, onDocumentUpdate }) {
                                     <p className="text-carbon-600 mb-4">
                                         This document is pending attestation. Review the project details and attest if valid.
                                     </p>
-                                    <button
-                                        onClick={() => setShowAttestationForm(true)}
-                                        className="btn-primary"
-                                    >
-                                        Start Attestation
-                                    </button>
+                                    <div className="flex space-x-3 justify-center">
+                                        <button
+                                            onClick={() => setShowAttestationForm(true)}
+                                            className="btn-primary"
+                                        >
+                                            Start Attestation
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const reason = prompt('Please provide a reason for rejection (optional):');
+                                                if (reason !== null) { // User didn't cancel
+                                                    handleRejectDocument(reason);
+                                                }
+                                            }}
+                                            className="btn-secondary bg-red-50 text-red-700 border-red-200 hover:bg-red-100 hover:border-red-300"
+                                        >
+                                            Reject Document
+                                        </button>
+                                    </div>
                                 </div>
                             )}
 
@@ -1397,9 +1604,23 @@ function DocumentDetailsModal({ document, onClose, onDocumentUpdate }) {
                                                 type="button"
                                                 onClick={() => setShowAttestationForm(false)}
                                                 disabled={isAttesting}
-                                                className="btn-secondary flex-1"
+                                                className="btn-secondary"
                                             >
                                                 Cancel
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const reason = prompt('Please provide a reason for rejection (optional):');
+                                                    if (reason !== null) { // User didn't cancel
+                                                        handleRejectDocument(reason);
+                                                    }
+                                                }}
+                                                disabled={isAttesting}
+                                                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center space-x-2"
+                                            >
+                                                <XCircleIcon className="w-4 h-4" />
+                                                <span>Reject</span>
                                             </button>
                                             <button
                                                 type="submit"

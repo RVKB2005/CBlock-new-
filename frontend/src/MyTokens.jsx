@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  WalletIcon, 
-  CheckCircleIcon, 
+import {
+  WalletIcon,
+  CheckCircleIcon,
   ShoppingBagIcon,
   PlusCircleIcon,
   LinkIcon,
@@ -19,6 +19,7 @@ export default function MyTokens({ onShow }) {
   const [loading, setLoading] = useState(false);
   const [approved, setApproved] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [checkingApproval, setCheckingApproval] = useState(false);
   const [marketplaceAddr] = useState(import.meta.env.VITE_CONTRACT_MARKETPLACE_ADDRESS);
 
   useEffect(() => {
@@ -28,6 +29,17 @@ export default function MyTokens({ onShow }) {
     }
   }, []);
 
+  // Periodically check approval status
+  useEffect(() => {
+    if (address && marketplaceAddr) {
+      const interval = setInterval(() => {
+        checkApprovalStatus();
+      }, 30000); // Check every 30 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [address, marketplaceAddr]);
+
   const checkConnection = async () => {
     if (window.ethereum) {
       try {
@@ -35,6 +47,11 @@ export default function MyTokens({ onShow }) {
         if (accounts.length > 0) {
           setAddress(accounts[0]);
           await loadTokens(accounts[0]);
+        } else {
+          // Reset state when no accounts
+          setAddress(null);
+          setTokens([]);
+          setApproved(false);
         }
       } catch (error) {
         console.error('Error checking connection:', error);
@@ -80,7 +97,7 @@ export default function MyTokens({ onShow }) {
 
       const nextId = Number(await carbon.nextTokenId());
       const found = [];
-      
+
       for (let i = 1; i < nextId; i++) {
         try {
           const bal = await carbon.balanceOf(addr, i);
@@ -105,12 +122,20 @@ export default function MyTokens({ onShow }) {
           console.error(`Error fetching token ${i}:`, e);
         }
       }
-      
+
       setTokens(found);
-      
+
       if (marketplaceAddr) {
         const isApproved = await carbon.isApprovedForAll(addr, marketplaceAddr);
+        console.log('🔍 Marketplace approval status:', {
+          userAddress: addr,
+          marketplaceAddress: marketplaceAddr,
+          isApproved: isApproved
+        });
         setApproved(isApproved);
+      } else {
+        console.warn('⚠️ Marketplace address not configured');
+        setApproved(false);
       }
     } catch (error) {
       console.error('Error loading tokens:', error);
@@ -120,25 +145,81 @@ export default function MyTokens({ onShow }) {
     }
   }
 
+  async function checkApprovalStatus() {
+    if (!window.ethereum || !address || !marketplaceAddr) return false;
+
+    setCheckingApproval(true);
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const carbonAddr = import.meta.env.VITE_CONTRACT_CARBON_ADDRESS;
+      const carbon = new ethers.Contract(carbonAddr, CarbonABI, signer);
+
+      const isApproved = await carbon.isApprovedForAll(address, marketplaceAddr);
+      console.log('🔄 Refreshed approval status:', {
+        address,
+        marketplaceAddr,
+        isApproved,
+        timestamp: new Date().toISOString()
+      });
+      setApproved(isApproved);
+      return isApproved;
+    } catch (error) {
+      console.error('Error checking approval status:', error);
+      setApproved(false); // Set to false on error to be safe
+      return false;
+    } finally {
+      setCheckingApproval(false);
+    }
+  }
+
   async function approveMarketplace() {
     if (!window.ethereum) return;
-    
+
     setApproving(true);
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const carbonAddr = import.meta.env.VITE_CONTRACT_CARBON_ADDRESS;
       const carbon = new ethers.Contract(carbonAddr, CarbonABI, signer);
-      
+
       toast.loading('Approving marketplace...', { id: 'approve' });
       const tx = await carbon.setApprovalForAll(marketplaceAddr, true);
       await tx.wait();
-      
-      setApproved(true);
+
+      // Refresh approval status after transaction
+      await checkApprovalStatus();
+
       toast.success('Marketplace approved successfully!', { id: 'approve' });
     } catch (error) {
       console.error('Approval error:', error);
       toast.error('Failed to approve marketplace', { id: 'approve' });
+    } finally {
+      setApproving(false);
+    }
+  }
+
+  async function revokeMarketplaceApproval() {
+    if (!window.ethereum) return;
+
+    setApproving(true);
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const carbonAddr = import.meta.env.VITE_CONTRACT_CARBON_ADDRESS;
+      const carbon = new ethers.Contract(carbonAddr, CarbonABI, signer);
+
+      toast.loading('Revoking marketplace approval...', { id: 'revoke' });
+      const tx = await carbon.setApprovalForAll(marketplaceAddr, false);
+      await tx.wait();
+
+      // Refresh approval status after transaction
+      await checkApprovalStatus();
+
+      toast.success('Marketplace approval revoked successfully!', { id: 'revoke' });
+    } catch (error) {
+      console.error('Revoke error:', error);
+      toast.error('Failed to revoke marketplace approval', { id: 'revoke' });
     } finally {
       setApproving(false);
     }
@@ -242,9 +323,29 @@ export default function MyTokens({ onShow }) {
             </motion.button>
           )}
           {approved && (
-            <div className="flex items-center space-x-2 text-green-600">
-              <CheckCircleIcon className="w-5 h-5" />
-              <span className="text-sm font-semibold">Marketplace Approved</span>
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-2 text-green-600">
+                <CheckCircleIcon className="w-5 h-5" />
+                <span className="text-sm font-semibold">Marketplace Approved</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={checkApprovalStatus}
+                  disabled={checkingApproval}
+                  className="text-xs text-carbon-500 hover:text-carbon-700 underline disabled:opacity-50"
+                  title="Refresh approval status"
+                >
+                  {checkingApproval ? 'Checking...' : 'Refresh'}
+                </button>
+                <button
+                  onClick={revokeMarketplaceApproval}
+                  disabled={approving}
+                  className="text-xs text-red-500 hover:text-red-700 underline"
+                  title="Revoke marketplace approval"
+                >
+                  {approving ? 'Processing...' : 'Revoke'}
+                </button>
+              </div>
             </div>
           )}
         </div>

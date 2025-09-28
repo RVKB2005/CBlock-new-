@@ -515,7 +515,7 @@ class BlockchainService {
         tokenId,
         documentId,
         recipient: attestationData.recipient,
-        amount: attestationData.quantity,
+        amount: attestationData.amount || attestationData.quantity,
       };
 
       // Process automatic credit allocation if document data is provided

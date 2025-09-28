@@ -8,6 +8,7 @@ import blockchainService from "./blockchain.js";
 class CreditAllocationService {
   constructor() {
     this.allocations = new Map(); // In-memory storage for allocation records
+    this.cache = new Map(); // Cache for expensive operations
     this.initializeStorage();
   }
 
@@ -57,6 +58,20 @@ class CreditAllocationService {
       const allocationId = `alloc_${Date.now()}_${Math.random()
         .toString(36)
         .slice(2, 8)}`;
+
+      // Ensure we capture the actual minted amount correctly
+      const mintedAmount = mintingResult.amount || mintingResult.quantity || 0;
+
+      console.log("💰 Creating allocation with amount:", {
+        mintingResultAmount: mintingResult.amount,
+        mintingResultQuantity: mintingResult.quantity,
+        finalMintedAmount: mintedAmount,
+        documentData: documentData.projectName,
+        recipient: mintingResult.recipient,
+        transactionHash: mintingResult.hash,
+        allocationId: allocationId,
+      });
+
       const allocation = {
         id: allocationId,
         documentId: documentData.id || documentData.cid,
@@ -64,7 +79,8 @@ class CreditAllocationService {
         recipientAddress: mintingResult.recipient,
         recipientName: documentData.uploaderName || "Unknown",
         recipientEmail: documentData.uploaderEmail || null,
-        amount: mintingResult.amount,
+        amount: mintedAmount, // Actual minted amount from blockchain
+        quantity: mintedAmount, // Backup field for compatibility
         tokenId: mintingResult.tokenId,
         transactionHash: mintingResult.hash,
         blockchainReceipt: mintingResult.receipt,
@@ -94,6 +110,13 @@ class CreditAllocationService {
       this.allocations.set(allocationId, allocation);
       this.saveToStorage();
 
+      console.log(
+        `✅ Allocation ${allocationId} stored successfully with amount: ${allocation.amount}`
+      );
+
+      // Trigger refresh event for listening components
+      this.triggerRefresh();
+
       // Send notification to user
       await this.sendAllocationNotification(allocation);
 
@@ -117,12 +140,16 @@ class CreditAllocationService {
       const failedAllocationId = `failed_alloc_${Date.now()}_${Math.random()
         .toString(36)
         .slice(2, 8)}`;
+
+      const mintedAmount = mintingResult.amount || mintingResult.quantity || 0;
+
       const failedAllocation = {
         id: failedAllocationId,
         documentId: documentData.id || documentData.cid,
         documentName: documentData.projectName || documentData.filename,
         recipientAddress: mintingResult.recipient,
-        amount: mintingResult.amount,
+        amount: mintedAmount, // Actual minted amount from blockchain
+        quantity: mintedAmount, // Backup field for compatibility
         transactionHash: mintingResult.hash,
         status: "failed",
         error: error.message,
@@ -204,6 +231,15 @@ class CreditAllocationService {
         userAddress = currentUser.walletAddress;
       }
 
+      // Check cache first for faster response
+      const cacheKey = `user_allocations_${userAddress}`;
+      const cached = this.cache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < 10000) {
+        // 10 second cache
+        console.log("📋 Returning cached allocations for user:", userAddress);
+        return cached.data;
+      }
+
       console.log("📋 Fetching allocations for user:", userAddress);
 
       const userAllocations = Array.from(this.allocations.values())
@@ -214,6 +250,12 @@ class CreditAllocationService {
               allocation.recipientEmail === authService.getCurrentUser()?.email)
         )
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      // Cache the result
+      this.cache.set(cacheKey, {
+        data: userAllocations,
+        timestamp: Date.now(),
+      });
 
       console.log(`📋 Found ${userAllocations.length} allocations for user`);
       return userAllocations;
@@ -453,12 +495,148 @@ class CreditAllocationService {
   }
 
   /**
+   * Fix allocations with zero amounts by checking blockchain data
+   */
+  async fixZeroAmountAllocations() {
+    try {
+      console.log("🔧 Checking for allocations with zero amounts...");
+
+      let fixedCount = 0;
+      const currentUser = authService.getCurrentUser();
+
+      if (!currentUser?.walletAddress) {
+        console.warn("No current user for fixing allocations");
+        return fixedCount;
+      }
+
+      // Get user's blockchain tokens to find actual amounts
+      const tokens = await blockchainService
+        .getUserTokens(currentUser.walletAddress)
+        .catch(() => []);
+
+      for (const [allocationId, allocation] of this.allocations.entries()) {
+        if (allocation.amount === 0 || !allocation.amount) {
+          console.log(`🔧 Found allocation with zero amount: ${allocationId}`);
+
+          // Try to find the actual amount from blockchain tokens
+          if (allocation.tokenId && tokens.length > 0) {
+            const matchingToken = tokens.find(
+              (token) => token.tokenId === allocation.tokenId
+            );
+            if (matchingToken && matchingToken.balance > 0) {
+              allocation.amount = matchingToken.balance;
+              allocation.quantity = matchingToken.balance;
+              allocation.updatedAt = new Date().toISOString();
+              allocation.fixedAmount = true;
+
+              this.allocations.set(allocationId, allocation);
+              fixedCount++;
+
+              console.log(
+                `✅ Fixed allocation ${allocationId}: amount set to ${matchingToken.balance}`
+              );
+            }
+          }
+
+          // If we still don't have an amount, try to get it from document estimated credits
+          if (
+            (!allocation.amount || allocation.amount === 0) &&
+            allocation.documentId
+          ) {
+            try {
+              const { default: documentService } = await import(
+                "./document.js"
+              );
+              const document = await documentService.getDocument(
+                allocation.documentId
+              );
+
+              if (document && document.estimatedCredits > 0) {
+                allocation.amount = document.estimatedCredits;
+                allocation.quantity = document.estimatedCredits;
+                allocation.updatedAt = new Date().toISOString();
+                allocation.fixedAmount = true;
+                allocation.fixedFromEstimate = true;
+
+                this.allocations.set(allocationId, allocation);
+                fixedCount++;
+
+                console.log(
+                  `✅ Fixed allocation ${allocationId}: amount set to estimated ${document.estimatedCredits}`
+                );
+              }
+            } catch (docError) {
+              console.warn(
+                `Could not get document for allocation ${allocationId}:`,
+                docError.message
+              );
+            }
+          }
+        }
+      }
+
+      if (fixedCount > 0) {
+        this.saveToStorage();
+        console.log(`✅ Fixed ${fixedCount} allocations with zero amounts`);
+      } else {
+        console.log("✅ No allocations needed fixing");
+      }
+
+      return fixedCount;
+    } catch (error) {
+      console.error("❌ Failed to fix zero amount allocations:", error);
+      return 0;
+    }
+  }
+
+  /**
    * Clear all allocation data (for testing/reset)
    */
   clearAllAllocations() {
     this.allocations.clear();
     localStorage.removeItem("cblock_credit_allocations");
     console.log("🗑️ All allocation data cleared");
+  }
+
+  /**
+   * Trigger a refresh event for components listening to allocation updates
+   */
+  triggerRefresh() {
+    // Clear cache when data changes
+    this.cache.clear();
+
+    // Dispatch a custom event that components can listen to
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("creditAllocationsUpdated", {
+          detail: {
+            timestamp: new Date().toISOString(),
+            totalAllocations: this.allocations.size,
+          },
+        })
+      );
+    }
+  }
+
+  /**
+   * Reset all credit allocation data to zero/empty state
+   */
+  resetAllData() {
+    try {
+      console.log("🔄 Resetting all credit allocation data...");
+
+      // Clear all allocations
+      this.allocations.clear();
+
+      // Remove from localStorage
+      localStorage.removeItem("cblock_credit_allocations");
+
+      console.log("✅ All credit allocation data has been reset");
+      return true;
+    } catch (error) {
+      console.error("❌ Failed to reset credit allocation data:", error);
+      return false;
+    }
   }
 }
 

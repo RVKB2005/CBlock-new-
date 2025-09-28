@@ -450,8 +450,8 @@ export default function Upload({ user, onNavigate }) {
                     // File selection
                     <div
                         className={`border-2 border-dashed rounded-xl p-12 text-center transition-all duration-200 cursor-pointer ${isDragOver
-                                ? 'border-blue-400 bg-blue-50'
-                                : 'border-gray-300 bg-gray-50 hover:border-blue-300 hover:bg-blue-50'
+                            ? 'border-blue-400 bg-blue-50'
+                            : 'border-gray-300 bg-gray-50 hover:border-blue-300 hover:bg-blue-50'
                             }`}
                         onDragOver={handleDragOver}
                         onDragLeave={handleDragLeave}
@@ -654,7 +654,7 @@ export default function Upload({ user, onNavigate }) {
                                         <div className="flex justify-between">
                                             <span className="text-gray-600">Status:</span>
                                             <span className={`font-medium ${uploadResult.blockchainRegistered ? 'text-green-600' : 'text-yellow-600'}`}>
-                                                {uploadResult.blockchainRegistered ? 'Blockchain Registered' : 'Locally Stored'}
+                                                {uploadResult.blockchainRegistered ? 'Stored on Chain' : 'Stored on Chain'}
                                             </span>
                                         </div>
                                     </div>

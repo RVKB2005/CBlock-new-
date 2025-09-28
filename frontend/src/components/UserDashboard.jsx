@@ -17,6 +17,7 @@ import creditAllocationService from '../services/creditAllocation.js';
 import documentService from '../services/document.js';
 import blockchainService from '../services/blockchain.js';
 import UserBalanceCard from './UserBalanceCard.jsx';
+import { resetAllApplicationData } from '../utils/dataReset.js';
 
 /**
  * Enhanced User Dashboard Component
@@ -44,16 +45,23 @@ export default function UserDashboard({ className = '', onPageChange }) {
 
             console.log('📊 Loading user dashboard data...');
 
-            // Load data in parallel for better performance
-            const [
-                balanceInfo,
-                userDocuments,
-                documentStats,
-                blockchainTokens,
-                allocationHistory,
-            ] = await Promise.all([
-                creditAllocationService.getUserBalanceInfo(currentUser.walletAddress),
+            // Load critical data first for faster initial render
+            const [userDocuments, allocationHistory] = await Promise.all([
                 documentService.getUserDocuments().catch(() => []),
+                creditAllocationService.getUserAllocations(currentUser.walletAddress).catch(() => []),
+            ]);
+
+            // Load non-critical data in background
+            const [balanceInfo, documentStats, blockchainTokens] = await Promise.all([
+                creditAllocationService.getUserBalanceInfo(currentUser.walletAddress).catch(() => ({
+                    currentBalance: 0,
+                    totalAllocated: 0,
+                    totalAllocations: 0,
+                    recentAllocations: [],
+                    pendingAllocations: [],
+                    tokens: [],
+                    lastUpdated: new Date().toISOString(),
+                })),
                 documentService.getDocumentStats().catch(() => ({
                     total: 0,
                     pending: 0,
@@ -62,8 +70,12 @@ export default function UserDashboard({ className = '', onPageChange }) {
                     rejected: 0,
                 })),
                 blockchainService.getUserTokens(currentUser.walletAddress).catch(() => []),
-                creditAllocationService.getUserAllocations(currentUser.walletAddress).catch(() => []),
             ]);
+
+            // Fix zero amount allocations in background (non-blocking)
+            creditAllocationService.fixZeroAmountAllocations().catch(err => {
+                console.warn('Failed to fix zero amount allocations:', err);
+            });
 
             // Calculate portfolio metrics
             const portfolioMetrics = calculatePortfolioMetrics(
@@ -108,7 +120,7 @@ export default function UserDashboard({ className = '', onPageChange }) {
 
         const totalCreditsEarned = allocations
             .filter(alloc => alloc.status === 'completed')
-            .reduce((sum, alloc) => sum + (alloc.amount || 0), 0);
+            .reduce((sum, alloc) => sum + (alloc.amount || alloc.quantity || 0), 0);
 
         const currentBalance = tokens.reduce((sum, token) => sum + token.balance, 0);
 
@@ -155,20 +167,208 @@ export default function UserDashboard({ className = '', onPageChange }) {
         await loadDashboardData();
     }, [loadDashboardData]);
 
+    /**
+     * Force refresh allocations and fix zero amounts
+     */
+    const handleForceRefresh = useCallback(async () => {
+        try {
+            setRefreshing(true);
+            console.log('🔄 Force refreshing dashboard data...');
+
+            // Fix zero amount allocations
+            const fixedCount = await creditAllocationService.fixZeroAmountAllocations();
+            if (fixedCount > 0) {
+                toast.success(`Fixed ${fixedCount} allocations with missing amounts`);
+            }
+
+            // Reload all data
+            await loadDashboardData();
+
+            toast.success('Dashboard refreshed successfully');
+        } catch (error) {
+            console.error('❌ Failed to force refresh:', error);
+            toast.error('Failed to refresh dashboard');
+        }
+    }, [loadDashboardData]);
+
+    /**
+     * Reset ALL data - documents, allocations, transactions, etc.
+     */
+    const handleResetAllData = useCallback(async () => {
+        const confirmed = window.confirm(
+            '⚠️ WARNING: This will permanently delete ALL your data including:\n\n' +
+            '• All uploaded documents\n' +
+            '• All credit allocations\n' +
+            '• All transaction history\n' +
+            '• All dashboard data\n\n' +
+            'This action cannot be undone. Are you sure you want to continue?'
+        );
+
+        if (!confirmed) return;
+
+        const doubleConfirm = window.confirm(
+            '🚨 FINAL WARNING: You are about to delete ALL DATA.\n\n' +
+            'Type "RESET" in the next prompt to confirm this action.'
+        );
+
+        if (!doubleConfirm) return;
+
+        const confirmText = window.prompt('Type "RESET" to confirm data deletion:');
+        if (confirmText !== 'RESET') {
+            toast.error('Reset cancelled - confirmation text did not match');
+            return;
+        }
+
+        try {
+            setRefreshing(true);
+            console.log('🗑️ RESETTING ALL DATA...');
+
+            // Reset credit allocations
+            const allocationsReset = creditAllocationService.resetAllData();
+            console.log('Credit allocations reset:', allocationsReset);
+
+            // Reset documents
+            const documentsReset = documentService.resetAllData();
+            console.log('Documents reset:', documentsReset);
+
+            // Clear any other localStorage items related to the app
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && (
+                    key.startsWith('cblock_') ||
+                    key.includes('carbon') ||
+                    key.includes('credit') ||
+                    key.includes('document') ||
+                    key.includes('allocation') ||
+                    key.includes('transaction')
+                )) {
+                    keysToRemove.push(key);
+                }
+            }
+
+            keysToRemove.forEach(key => {
+                localStorage.removeItem(key);
+                console.log(`Removed localStorage key: ${key}`);
+            });
+
+            // Clear dashboard data
+            setDashboardData(null);
+
+            // Reload fresh data (should be empty now)
+            await loadDashboardData();
+
+            toast.success('🗑️ ALL DATA HAS BEEN RESET TO ZERO', {
+                duration: 8000,
+                style: {
+                    background: '#ef4444',
+                    color: 'white',
+                    fontWeight: 'bold'
+                }
+            });
+
+            console.log('✅ ALL DATA RESET COMPLETED');
+
+        } catch (error) {
+            console.error('❌ Failed to reset all data:', error);
+            toast.error(`Failed to reset data: ${error.message}`);
+        } finally {
+            setRefreshing(false);
+        }
+    }, [loadDashboardData]);
+
     // Load dashboard data on component mount
     useEffect(() => {
         loadDashboardData();
     }, [loadDashboardData]);
 
-    // Set up periodic refresh for real-time updates
+    // Set up smart refresh - faster when active, slower when idle
     useEffect(() => {
-        const interval = setInterval(() => {
+        let interval;
+        let isActive = true;
+
+        const setRefreshInterval = (fast = false) => {
+            if (interval) clearInterval(interval);
+            interval = setInterval(() => {
+                if (!loading && !refreshing) {
+                    loadDashboardData();
+                }
+            }, fast ? 15000 : 60000); // 15s when active, 60s when idle
+        };
+
+        // Start with fast refresh
+        setRefreshInterval(true);
+
+        // Slow down after 2 minutes of no activity
+        const slowDownTimer = setTimeout(() => {
+            isActive = false;
+            setRefreshInterval(false);
+        }, 120000);
+
+        // Speed up on user activity
+        const handleActivity = () => {
+            if (!isActive) {
+                isActive = true;
+                setRefreshInterval(true);
+                setTimeout(() => {
+                    isActive = false;
+                    setRefreshInterval(false);
+                }, 120000);
+            }
+        };
+
+        window.addEventListener('mousemove', handleActivity);
+        window.addEventListener('keydown', handleActivity);
+        window.addEventListener('click', handleActivity);
+
+        return () => {
+            clearInterval(interval);
+            clearTimeout(slowDownTimer);
+            window.removeEventListener('mousemove', handleActivity);
+            window.removeEventListener('keydown', handleActivity);
+            window.removeEventListener('click', handleActivity);
+        };
+    }, [loading, refreshing, loadDashboardData]);
+
+    // Listen for credit allocation updates
+    useEffect(() => {
+        const handleAllocationUpdate = (event) => {
+            console.log('📊 Credit allocations updated, refreshing dashboard...', event.detail);
             if (!loading && !refreshing) {
                 loadDashboardData();
             }
-        }, 60000); // Refresh every minute
+        };
 
-        return () => clearInterval(interval);
+        const handleDocumentUpdate = (event) => {
+            console.log('📄 Documents updated, refreshing dashboard...', event.detail);
+            if (!loading && !refreshing) {
+                loadDashboardData();
+            }
+        };
+
+        window.addEventListener('creditAllocationsUpdated', handleAllocationUpdate);
+        window.addEventListener('documentsUpdated', handleDocumentUpdate);
+
+        return () => {
+            window.removeEventListener('creditAllocationsUpdated', handleAllocationUpdate);
+            window.removeEventListener('documentsUpdated', handleDocumentUpdate);
+        };
+    }, [loading, refreshing, loadDashboardData]);
+
+    // Refresh when user returns to tab
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (!document.hidden && !loading && !refreshing) {
+                console.log('👁️ Tab became visible, refreshing dashboard...');
+                loadDashboardData();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [loading, refreshing, loadDashboardData]);
 
     // Don't render if user is not authenticated
@@ -279,9 +479,11 @@ export default function UserDashboard({ className = '', onPageChange }) {
                         disabled={refreshing}
                         className="p-2 text-carbon-400 hover:text-carbon-600 hover:bg-carbon-100 rounded-lg transition-colors disabled:opacity-50"
                         aria-label="Refresh dashboard"
+                        title="Quick refresh"
                     >
                         <ArrowPathIcon className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
                     </button>
+
                     <span className="text-xs text-carbon-500">
                         Last updated: {new Date(dashboardData.lastUpdated).toLocaleTimeString()}
                     </span>
@@ -306,12 +508,12 @@ export default function UserDashboard({ className = '', onPageChange }) {
                     onClick={() => setActiveTab('documents')}
                 />
                 <QuickStatCard
-                    title="Credits Earned"
+                    title="Credits Minted"
                     value={dashboardData.portfolio.totalCreditsEarned}
                     suffix="Total"
                     icon={ArrowTrendingUpIcon}
                     color="from-purple-500 to-purple-600"
-                    onClick={() => setActiveTab('portfolio')}
+                    onClick={() => setActiveTab('transactions')}
                 />
                 <QuickStatCard
                     title="Verification Rate"
@@ -357,7 +559,7 @@ export default function UserDashboard({ className = '', onPageChange }) {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.2 }}
+                    transition={{ duration: 0.15 }}
                 >
                     {activeTab === 'overview' && (
                         <OverviewTab
@@ -365,20 +567,20 @@ export default function UserDashboard({ className = '', onPageChange }) {
                             onPageChange={onPageChange}
                         />
                     )}
-                    {activeTab === 'documents' && (
+                    {activeTab === 'documents' && dashboardData && (
                         <DocumentsTab
                             documents={dashboardData.documents}
                             stats={dashboardData.documentStats}
                             onPageChange={onPageChange}
                         />
                     )}
-                    {activeTab === 'transactions' && (
+                    {activeTab === 'transactions' && dashboardData && (
                         <TransactionsTab
                             allocations={dashboardData.allocations}
                             balance={dashboardData.balance}
                         />
                     )}
-                    {activeTab === 'portfolio' && (
+                    {activeTab === 'portfolio' && dashboardData && (
                         <PortfolioTab
                             portfolio={dashboardData.portfolio}
                             documents={dashboardData.documents}
@@ -471,7 +673,7 @@ function OverviewTab({ data, onPageChange }) {
                 {/* Recent Credit Allocations */}
                 <div className="card">
                     <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-lg font-semibold text-carbon-900">Recent Credits</h3>
+                        <h3 className="text-lg font-semibold text-carbon-900">Recent Credit Allocations</h3>
                         <button
                             onClick={() => onPageChange?.('tokens')}
                             className="text-primary-600 hover:text-primary-700 text-sm font-medium"
@@ -485,7 +687,7 @@ function OverviewTab({ data, onPageChange }) {
                                 <CurrencyDollarIcon className="w-12 h-12 text-carbon-400 mx-auto mb-3" />
                                 <p className="text-carbon-600">No credit allocations yet</p>
                                 <p className="text-carbon-500 text-sm">
-                                    Credits will appear here when your documents are verified
+                                    Minted credits will appear here when your documents are verified and minted on the blockchain
                                 </p>
                             </div>
                         ) : (
@@ -599,7 +801,11 @@ function DocumentItem({ document }) {
                     {document.projectName || document.filename}
                 </p>
                 <p className="text-xs text-carbon-500">
-                    {formatDate(document.createdAt)} • {document.estimatedCredits || 0} credits
+                    {formatDate(document.createdAt)} • {
+                        document.status === 'minted' && document.mintingResult?.amount
+                            ? `${document.mintingResult.amount} credits minted`
+                            : `${document.estimatedCredits || 0} credits estimated`
+                    }
                 </p>
             </div>
             <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(document.status)}`}>
@@ -610,7 +816,7 @@ function DocumentItem({ document }) {
 }
 
 /**
- * Allocation Item Component
+ * Allocation Item Component - Shows actual minted credits
  */
 function AllocationItem({ allocation }) {
     const formatAmount = (amount) => {
@@ -630,19 +836,64 @@ function AllocationItem({ allocation }) {
         }
     };
 
+    // Get the actual minted amount from the allocation
+    const mintedAmount = allocation.amount || allocation.quantity || 0;
+    const isCompleted = allocation.status === 'completed';
+
+    // Debug logging for zero amounts
+    if (mintedAmount === 0) {
+        console.warn('⚠️ AllocationItem received zero amount:', {
+            allocationId: allocation.id,
+            amount: allocation.amount,
+            quantity: allocation.quantity,
+            status: allocation.status,
+            documentName: allocation.documentName
+        });
+    }
+
     return (
-        <div className="flex items-center space-x-3 p-3 rounded-lg bg-green-50 border border-green-200">
-            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                <CurrencyDollarIcon className="w-4 h-4 text-green-600" />
+        <div className={`flex items-center space-x-3 p-3 rounded-lg border ${isCompleted
+            ? 'bg-green-50 border-green-200'
+            : 'bg-yellow-50 border-yellow-200'
+            }`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isCompleted
+                ? 'bg-green-100'
+                : 'bg-yellow-100'
+                }`}>
+                <CurrencyDollarIcon className={`w-4 h-4 ${isCompleted
+                    ? 'text-green-600'
+                    : 'text-yellow-600'
+                    }`} />
             </div>
             <div className="flex-1">
-                <p className="text-sm font-medium text-green-900">
-                    +{formatAmount(allocation.amount)} credits allocated
+                <p className={`text-sm font-medium ${isCompleted
+                    ? 'text-green-900'
+                    : 'text-yellow-900'
+                    }`}>
+                    {isCompleted ? '+' : ''}{formatAmount(mintedAmount)} credits {isCompleted ? 'minted' : 'pending'}
                 </p>
-                <p className="text-xs text-green-700">
-                    {allocation.documentName} • {formatDate(allocation.allocatedAt || allocation.createdAt)}
+                <p className={`text-xs ${isCompleted
+                    ? 'text-green-700'
+                    : 'text-yellow-700'
+                    }`}>
+                    {allocation.documentName || 'Document'} • {formatDate(allocation.allocatedAt || allocation.createdAt)}
+                    {allocation.transactionHash && (
+                        <span className="ml-2">
+                            • <a
+                                href={`https://sepolia.etherscan.io/tx/${allocation.transactionHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="underline hover:no-underline"
+                            >
+                                View TX
+                            </a>
+                        </span>
+                    )}
                 </p>
             </div>
+            {isCompleted && (
+                <CheckCircleIcon className="w-5 h-5 text-green-500" />
+            )}
         </div>
     );
 }
@@ -677,24 +928,88 @@ function DocumentsTab({ documents, stats, onPageChange }) {
 }
 
 /**
- * Transactions Tab Component - Simplified version
+ * Transactions Tab Component - Shows actual minted credit history
  */
 function TransactionsTab({ allocations, balance }) {
+    // Filter and sort allocations to show minted credits first
+    const mintedAllocations = allocations.filter(alloc => alloc.status === 'completed');
+    const pendingAllocations = allocations.filter(alloc => alloc.status !== 'completed');
+    const totalMintedCredits = mintedAllocations.reduce((sum, alloc) => sum + (alloc.amount || 0), 0);
+
     return (
         <div className="space-y-6">
+            {/* Summary Card */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="card bg-gradient-to-br from-green-500 to-green-600 text-white">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-white/80 text-sm font-medium">Total Minted</p>
+                            <p className="text-2xl font-bold">{new Intl.NumberFormat('en-US').format(totalMintedCredits)}</p>
+                        </div>
+                        <CheckCircleIcon className="w-8 h-8 text-white/60" />
+                    </div>
+                </div>
+                <div className="card bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-white/80 text-sm font-medium">Current Balance</p>
+                            <p className="text-2xl font-bold">{new Intl.NumberFormat('en-US').format(balance.currentBalance || 0)}</p>
+                        </div>
+                        <CurrencyDollarIcon className="w-8 h-8 text-white/60" />
+                    </div>
+                </div>
+                <div className="card bg-gradient-to-br from-yellow-500 to-yellow-600 text-white">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-white/80 text-sm font-medium">Pending</p>
+                            <p className="text-2xl font-bold">{pendingAllocations.length}</p>
+                        </div>
+                        <ClockIcon className="w-8 h-8 text-white/60" />
+                    </div>
+                </div>
+            </div>
+
+            {/* Minted Credits History */}
             <div className="card">
-                <h3 className="text-lg font-semibold text-carbon-900 mb-6">Credit Transactions</h3>
+                <h3 className="text-lg font-semibold text-carbon-900 mb-6">
+                    Credit Allocation History
+                    <span className="text-sm font-normal text-carbon-600 ml-2">
+                        ({allocations.length} total allocations)
+                    </span>
+                </h3>
                 <div className="space-y-4">
                     {allocations.length === 0 ? (
                         <div className="text-center py-12">
                             <CurrencyDollarIcon className="w-16 h-16 text-carbon-400 mx-auto mb-4" />
-                            <h3 className="text-lg font-semibold text-carbon-900 mb-2">No transactions yet</h3>
-                            <p className="text-carbon-600">Credit allocations will appear here when your documents are verified and minted.</p>
+                            <h3 className="text-lg font-semibold text-carbon-900 mb-2">No credit allocations yet</h3>
+                            <p className="text-carbon-600">Credit allocations will appear here when your documents are verified and minted on the blockchain.</p>
                         </div>
                     ) : (
-                        allocations.map((allocation) => (
-                            <AllocationItem key={allocation.id} allocation={allocation} />
-                        ))
+                        <>
+                            {/* Show minted credits first */}
+                            {mintedAllocations.length > 0 && (
+                                <div className="space-y-3">
+                                    <h4 className="text-sm font-medium text-green-700 border-b border-green-200 pb-2">
+                                        ✅ Minted Credits ({mintedAllocations.length})
+                                    </h4>
+                                    {mintedAllocations.map((allocation) => (
+                                        <AllocationItem key={allocation.id} allocation={allocation} />
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Show pending allocations */}
+                            {pendingAllocations.length > 0 && (
+                                <div className="space-y-3 mt-6">
+                                    <h4 className="text-sm font-medium text-yellow-700 border-b border-yellow-200 pb-2">
+                                        ⏳ Pending Allocations ({pendingAllocations.length})
+                                    </h4>
+                                    {pendingAllocations.map((allocation) => (
+                                        <AllocationItem key={allocation.id} allocation={allocation} />
+                                    ))}
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>

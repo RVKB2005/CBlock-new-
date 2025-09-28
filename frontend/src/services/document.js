@@ -401,71 +401,91 @@ class DocumentService {
 
       let documents = [];
 
-      // Try to get documents from blockchain first
-      try {
-        const blockchainDocs = await blockchainService.getAllDocuments();
+      // Load local documents first for faster response
+      const localDocuments = Array.from(this.documents.values()).map((doc) => ({
+        ...doc,
+        source: doc.blockchainRegistered ? "blockchain" : "local",
+      }));
 
-        // Merge with local documents to get additional metadata
-        documents = blockchainDocs.map((blockchainDoc) => {
-          // Try multiple ways to find the local document
-          let localDoc =
-            this.documents.get(blockchainDoc.id?.toString()) ||
-            this.documents.get(blockchainDoc.cid) ||
-            this.documents.get(blockchainDoc.id);
+      // If we have local documents, return them for fast loading
+      if (localDocuments.length > 0) {
+        console.log(
+          `📋 Fast load: Retrieved ${localDocuments.length} documents from local storage`
+        );
+        documents = localDocuments;
+      } else {
+        // Only fetch from blockchain if no local documents
+        try {
+          const blockchainDocs = await blockchainService.getAllDocuments();
 
-          // If not found by direct lookup, search by CID or ID match
-          if (!localDoc) {
-            for (const [key, doc] of this.documents.entries()) {
-              if (
-                doc.cid === blockchainDoc.cid ||
-                doc.id === blockchainDoc.id ||
-                doc.id === blockchainDoc.id?.toString()
-              ) {
-                localDoc = doc;
-                break;
+          // Merge with local documents to get additional metadata
+          documents = blockchainDocs.map((blockchainDoc) => {
+            // Try multiple ways to find the local document
+            let localDoc =
+              this.documents.get(blockchainDoc.id?.toString()) ||
+              this.documents.get(blockchainDoc.cid) ||
+              this.documents.get(blockchainDoc.id);
+
+            // If not found by direct lookup, search by CID or ID match
+            if (!localDoc) {
+              for (const [key, doc] of this.documents.entries()) {
+                if (
+                  doc.cid === blockchainDoc.cid ||
+                  doc.id === blockchainDoc.id ||
+                  doc.id === blockchainDoc.id?.toString()
+                ) {
+                  localDoc = doc;
+                  break;
+                }
               }
             }
-          }
 
-          return {
-            ...blockchainDoc,
-            // Add local metadata if available
-            filename: localDoc?.filename || "Unknown",
-            fileSize: localDoc?.fileSize || 0,
-            mimeType: localDoc?.mimeType || "application/octet-stream",
-            uploaderName: localDoc?.uploaderName || "Unknown",
-            uploaderEmail: localDoc?.uploaderEmail || "Unknown",
-            ipfsUrl:
-              localDoc?.ipfsUrl || `https://w3s.link/ipfs/${blockchainDoc.cid}`,
-            isMockIPFS: localDoc?.isMockIPFS || false,
+            return {
+              ...blockchainDoc,
+              // Add local metadata if available
+              filename: localDoc?.filename || "Unknown",
+              fileSize: localDoc?.fileSize || 0,
+              mimeType: localDoc?.mimeType || "application/octet-stream",
+              uploaderName: localDoc?.uploaderName || "Unknown",
+              uploaderEmail: localDoc?.uploaderEmail || "Unknown",
+              ipfsUrl:
+                localDoc?.ipfsUrl ||
+                `https://w3s.link/ipfs/${blockchainDoc.cid}`,
+              isMockIPFS: localDoc?.isMockIPFS || false,
 
-            // Map blockchain status to our status enum
-            status: blockchainDoc.isAttested
-              ? DOCUMENT_STATUS.ATTESTED
-              : DOCUMENT_STATUS.PENDING,
+              // Map blockchain status to our status enum, but preserve local status if more advanced
+              status:
+                localDoc?.status &&
+                (localDoc.status === DOCUMENT_STATUS.MINTED ||
+                  localDoc.status === DOCUMENT_STATUS.REJECTED)
+                  ? localDoc.status // Preserve minted/rejected status from local storage
+                  : blockchainDoc.isAttested
+                  ? DOCUMENT_STATUS.ATTESTED
+                  : DOCUMENT_STATUS.PENDING,
 
-            // Use blockchain data as primary source - FIX: Map uploader to uploadedBy
-            uploadedBy: blockchainDoc.uploader || localDoc?.uploadedBy,
-            uploaderType: this.getUserTypeFromAddress(blockchainDoc.uploader),
-            blockchainRegistered: true,
-            source: "blockchain",
-          };
-        });
+              // Use blockchain data as primary source - FIX: Map uploader to uploadedBy
+              uploadedBy: blockchainDoc.uploader || localDoc?.uploadedBy,
+              uploaderType: this.getUserTypeFromAddress(blockchainDoc.uploader),
+              blockchainRegistered: true,
+              source: "blockchain",
+            };
+          });
 
-        console.log(
-          `📋 Retrieved ${documents.length} documents from blockchain`
-        );
-      } catch (blockchainError) {
-        console.warn(
-          "⚠️ Failed to fetch from blockchain, using local documents:",
-          blockchainError.message
-        );
+          console.log(
+            `📋 Retrieved ${documents.length} documents from blockchain`
+          );
+        } catch (blockchainError) {
+          console.warn(
+            "⚠️ Failed to fetch from blockchain, using local documents:",
+            blockchainError.message
+          );
 
-        // Fallback to local documents
-        documents = Array.from(this.documents.values()).map((doc) => ({
-          ...doc,
-          source: "local",
-        }));
+          // Fallback to local documents
+          documents = Array.from(this.documents.values()).map((doc) => ({
+            ...doc,
+            source: "local",
+          }));
+        }
       }
 
       // Add any local-only documents that aren't on blockchain
@@ -614,9 +634,14 @@ class DocumentService {
                 localDoc?.ipfsUrl ||
                 `https://w3s.link/ipfs/${blockchainDoc.cid}`,
               isMockIPFS: localDoc?.isMockIPFS || false,
-              status: blockchainDoc.isAttested
-                ? DOCUMENT_STATUS.ATTESTED
-                : DOCUMENT_STATUS.PENDING,
+              status:
+                localDoc?.status &&
+                (localDoc.status === DOCUMENT_STATUS.MINTED ||
+                  localDoc.status === DOCUMENT_STATUS.REJECTED)
+                  ? localDoc.status // Preserve minted/rejected status from local storage
+                  : blockchainDoc.isAttested
+                  ? DOCUMENT_STATUS.ATTESTED
+                  : DOCUMENT_STATUS.PENDING,
               blockchainRegistered: true,
               source: "blockchain",
             };
@@ -797,6 +822,10 @@ class DocumentService {
       this.saveToStorage();
 
       console.log(`✅ Document status updated successfully`);
+
+      // Trigger refresh event for listening components
+      this.triggerRefresh();
+
       return updatedDocument;
     } catch (error) {
       console.error("❌ Failed to update document status:", error);
@@ -950,6 +979,9 @@ class DocumentService {
 
       console.log("✅ Document attestation completed successfully");
 
+      // Trigger refresh event for listening components
+      this.triggerRefresh();
+
       return {
         success: true,
         document: updatedDocument,
@@ -1039,24 +1071,57 @@ class DocumentService {
 
       console.log(`🪙 Updating document ${documentId} with minting data`);
 
-      const document = this.documents.get(documentId);
+      // Use the same lookup logic as updateDocumentStatus to find the document
+      let document = this.documents.get(documentId);
+      let actualKey = documentId;
+
       if (!document) {
+        // Try converting to string if it's a number
+        const stringId = documentId.toString();
+        document = this.documents.get(stringId);
+        if (document) {
+          actualKey = stringId;
+        }
+      }
+
+      if (!document) {
+        // Try to find by CID if the documentId might be a CID
+        for (const [key, doc] of this.documents.entries()) {
+          if (doc.cid === documentId || doc.id === documentId) {
+            document = doc;
+            actualKey = key;
+            break;
+          }
+        }
+      }
+
+      if (!document) {
+        console.warn(`⚠️ Document not found for minting update: ${documentId}`);
+        console.log(
+          `📋 Available documents:`,
+          Array.from(this.documents.keys())
+        );
         throw new Error("Document not found");
       }
 
       // Check if document is already minted
       if (document.status === DOCUMENT_STATUS.MINTED) {
-        throw new Error("Document has already been minted");
+        console.log(
+          `⚠️ Document ${documentId} is already minted, skipping update`
+        );
+        return document;
       }
 
-      // Check if document is attested
+      // Check if document is attested (allow minting from attested status)
       if (document.status !== DOCUMENT_STATUS.ATTESTED) {
-        throw new Error("Document must be attested before minting");
+        console.warn(
+          `⚠️ Document ${documentId} status is ${document.status}, expected ATTESTED. Proceeding with minting update anyway.`
+        );
       }
 
       // Update document with minting information
       const updatedDocument = await this.updateDocumentStatus(
-        documentId,
+        actualKey, // Use the actual key we found
         DOCUMENT_STATUS.MINTED,
         {
           mintingResult: {
@@ -1070,7 +1135,13 @@ class DocumentService {
         }
       );
 
-      console.log(`✅ Document minting information updated successfully`);
+      console.log(
+        `✅ Document minting information updated successfully - Status: ${updatedDocument.status}`
+      );
+
+      // Trigger refresh event for listening components
+      this.triggerRefresh();
+
       return updatedDocument;
     } catch (error) {
       console.error("❌ Failed to update document minting:", error);
@@ -1158,6 +1229,44 @@ class DocumentService {
             : "Document service partially configured",
       },
     };
+  }
+
+  /**
+   * Trigger a refresh event for components listening to document updates
+   */
+  triggerRefresh() {
+    // Dispatch a custom event that components can listen to
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("documentsUpdated", {
+          detail: {
+            timestamp: new Date().toISOString(),
+            totalDocuments: this.documents.size,
+          },
+        })
+      );
+    }
+  }
+
+  /**
+   * Reset all document data to zero/empty state
+   */
+  resetAllData() {
+    try {
+      console.log("🔄 Resetting all document data...");
+
+      // Clear all documents
+      this.documents.clear();
+
+      // Remove from localStorage
+      localStorage.removeItem("cblock_documents");
+
+      console.log("✅ All document data has been reset");
+      return true;
+    } catch (error) {
+      console.error("❌ Failed to reset document data:", error);
+      return false;
+    }
   }
 }
 

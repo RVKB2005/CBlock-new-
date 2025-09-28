@@ -16,6 +16,7 @@ import { LoadingOverlay } from './components/LoadingStates.jsx';
 import errorHandler from './services/errorHandler.js';
 import toastNotifications from './components/ToastNotifications.jsx';
 import { ROLES, PERMISSIONS } from './utils/permissions.js';
+import { initializeConsoleCommands } from './utils/consoleCommands.js';
 
 // Layout Components
 import Layout from './components/Layout';
@@ -59,6 +60,9 @@ export default function App() {
     console.log('useEffect triggered');
     checkUserSession();
     checkWalletConnection();
+
+    // Initialize console commands for development
+    initializeConsoleCommands();
 
     // Listen for account changes
     if (window.ethereum) {
