@@ -2,7 +2,6 @@ import blockchainService from "./blockchain.js";
 
 // Role permission constants
 const ROLE_PERMISSIONS = {
-  individual: ["upload_document", "view_own_documents", "view_credits"],
   business: ["upload_document", "view_own_documents", "view_credits"],
   verifier: [
     "view_all_documents",
@@ -28,7 +27,7 @@ const ROLE_PERMISSIONS = {
   ],
 };
 
-const VALID_ACCOUNT_TYPES = ["individual", "business", "verifier", "admin"];
+const VALID_ACCOUNT_TYPES = ["business", "verifier", "admin"];
 
 class AuthService {
   constructor() {
@@ -225,7 +224,7 @@ class AuthService {
     if (!this.currentUser) {
       return null;
     }
-    return this.currentUser.accountType || "individual";
+    return this.currentUser.accountType || "business";
   }
 
   // Check if user has specific permission
@@ -250,7 +249,7 @@ class AuthService {
   // Validate account type
   validateAccountType(accountType) {
     if (!accountType) {
-      return { valid: true, accountType: "individual" }; // Default to individual
+      return { valid: true, accountType: "business" }; // Default to business
     }
 
     if (!VALID_ACCOUNT_TYPES.includes(accountType)) {
@@ -532,7 +531,7 @@ class AuthService {
             lastName: sessionData.lastName,
             email: sessionData.email,
             organization: sessionData.organization || "",
-            accountType: sessionData.accountType || "individual",
+            accountType: sessionData.accountType || "business",
             walletAddress: sessionData.walletAddress || "",
             passwordHash: "", // Cannot restore password hash
             createdAt: new Date().toISOString(),

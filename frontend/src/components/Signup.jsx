@@ -20,7 +20,7 @@ export default function Signup({ onShowAuth, onLogin }) {
     lastName: '',
     email: '',
     organization: '',
-    accountType: 'individual', // individual, business, verifier
+    accountType: 'business', // business, verifier
     password: '',
     confirmPassword: '',
     acceptTerms: false,
@@ -194,14 +194,8 @@ export default function Signup({ onShowAuth, onLogin }) {
                 <label className="block text-sm font-semibold text-carbon-700 mb-4">
                   Account Type
                 </label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {[
-                    {
-                      type: 'individual',
-                      title: 'Individual',
-                      description: 'Personal offsetting',
-                      icon: '👤'
-                    },
                     {
                       type: 'business',
                       title: 'Business',

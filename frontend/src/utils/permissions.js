@@ -23,7 +23,6 @@ export const PERMISSIONS = {
 
 // Available roles in the system
 export const ROLES = {
-  INDIVIDUAL: "individual",
   BUSINESS: "business",
   VERIFIER: "verifier",
   ADMIN: "admin",
@@ -33,7 +32,6 @@ export const ROLES = {
 export const PAGE_ACCESS = {
   dashboard: {
     allowedRoles: [
-      ROLES.INDIVIDUAL,
       ROLES.BUSINESS,
       ROLES.VERIFIER,
       ROLES.ADMIN,
@@ -42,7 +40,6 @@ export const PAGE_ACCESS = {
   },
   tokens: {
     allowedRoles: [
-      ROLES.INDIVIDUAL,
       ROLES.BUSINESS,
       ROLES.VERIFIER,
       ROLES.ADMIN,
@@ -50,11 +47,11 @@ export const PAGE_ACCESS = {
     requiredPermissions: [PERMISSIONS.VIEW_CREDITS],
   },
   mint: {
-    allowedRoles: [ROLES.INDIVIDUAL, ROLES.BUSINESS], // Only non-verifiers can upload
+    allowedRoles: [ROLES.BUSINESS], // Only non-verifiers can upload
     requiredPermissions: [PERMISSIONS.UPLOAD_DOCUMENT],
   },
   mintCredits: {
-    allowedRoles: [ROLES.INDIVIDUAL, ROLES.BUSINESS], // Only non-verifiers can upload
+    allowedRoles: [ROLES.BUSINESS], // Only non-verifiers can upload
     requiredPermissions: [PERMISSIONS.UPLOAD_DOCUMENT],
   },
   verifierDashboard: {
@@ -66,7 +63,6 @@ export const PAGE_ACCESS = {
   },
   market: {
     allowedRoles: [
-      ROLES.INDIVIDUAL,
       ROLES.BUSINESS,
       ROLES.VERIFIER,
       ROLES.ADMIN,
@@ -75,7 +71,6 @@ export const PAGE_ACCESS = {
   },
   retire: {
     allowedRoles: [
-      ROLES.INDIVIDUAL,
       ROLES.BUSINESS,
       ROLES.VERIFIER,
       ROLES.ADMIN,
@@ -84,7 +79,6 @@ export const PAGE_ACCESS = {
   },
   analytics: {
     allowedRoles: [
-      ROLES.INDIVIDUAL,
       ROLES.BUSINESS,
       ROLES.VERIFIER,
       ROLES.ADMIN,
@@ -93,7 +87,6 @@ export const PAGE_ACCESS = {
   },
   settings: {
     allowedRoles: [
-      ROLES.INDIVIDUAL,
       ROLES.BUSINESS,
       ROLES.VERIFIER,
       ROLES.ADMIN,
@@ -102,7 +95,6 @@ export const PAGE_ACCESS = {
   },
   portfolio: {
     allowedRoles: [
-      ROLES.INDIVIDUAL,
       ROLES.BUSINESS,
       ROLES.VERIFIER,
       ROLES.ADMIN,
@@ -193,7 +185,7 @@ export const hasAllPermissions = (permissions, user = null) => {
  */
 export const hasRole = (role, user = null) => {
   const currentUser = user || authService.getCurrentUser();
-  const userRole = currentUser?.accountType || ROLES.INDIVIDUAL;
+  const userRole = currentUser?.accountType || ROLES.BUSINESS;
   return userRole === role;
 };
 
@@ -214,7 +206,7 @@ export const hasAnyRole = (roles, user = null) => {
  */
 export const getCurrentUserRole = (user = null) => {
   const currentUser = user || authService.getCurrentUser();
-  return currentUser?.accountType || ROLES.INDIVIDUAL;
+  return currentUser?.accountType || ROLES.BUSINESS;
 };
 
 /**
@@ -236,14 +228,6 @@ export const isVerifier = (user = null) => {
   return hasRole(ROLES.VERIFIER, user);
 };
 
-/**
- * Check if current user is an individual
- * @param {Object} user - User object (optional, will use current user if not provided)
- * @returns {boolean} - Whether user is an individual
- */
-export const isIndividual = (user = null) => {
-  return hasRole(ROLES.INDIVIDUAL, user);
-};
 
 /**
  * Check if current user is a business
@@ -276,7 +260,6 @@ export const getRoleBasedLandingPage = (user = null) => {
       return "admin";
     case ROLES.VERIFIER:
       return "verifierDashboard";
-    case ROLES.INDIVIDUAL:
     case ROLES.BUSINESS:
       return "dashboard";
     default:
@@ -322,7 +305,6 @@ export const filterNavigationByPermissions = (navigationItems, user = null) => {
  */
 export const getRoleDisplayName = (role) => {
   const roleNames = {
-    [ROLES.INDIVIDUAL]: "Individual User",
     [ROLES.BUSINESS]: "Business User",
     [ROLES.VERIFIER]: "Verifier",
     [ROLES.ADMIN]: "Administrator",
