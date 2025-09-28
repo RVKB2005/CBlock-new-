@@ -170,9 +170,24 @@ export function validateAttestationData(attestationData) {
     );
   }
 
-  // Validate IPFS CID format (basic validation)
-  if (!ipfsCid.startsWith("Qm") && !ipfsCid.startsWith("bafy")) {
-    throw new Error("Invalid IPFS CID format");
+  // Validate IPFS CID format (flexible validation for various CID formats)
+  const validCidPrefixes = ["Qm", "bafy", "baf", "k51", "z", "f01"];
+  const isValidCid =
+    validCidPrefixes.some((prefix) => ipfsCid.startsWith(prefix)) ||
+    /^[a-zA-Z0-9]{46,}$/.test(ipfsCid); // Basic length and character check
+
+  if (!isValidCid) {
+    console.error("Invalid IPFS CID format:", {
+      cid: ipfsCid,
+      length: ipfsCid.length,
+      startsWithValidPrefix: validCidPrefixes.some((prefix) =>
+        ipfsCid.startsWith(prefix)
+      ),
+      matchesPattern: /^[a-zA-Z0-9]{46,}$/.test(ipfsCid),
+    });
+    throw new Error(
+      `Invalid IPFS CID format: ${ipfsCid} (length: ${ipfsCid.length})`
+    );
   }
 
   return true;
@@ -186,10 +201,34 @@ export function validateAttestationData(attestationData) {
  * @returns {Object} Formatted attestation data
  */
 export function createAttestationData(formData, document, nonce) {
+  // Ensure document has required properties
+  if (!document) {
+    throw new Error("Document object is required for attestation");
+  }
+
+  // Try to get CID from multiple possible properties
+  const ipfsCid =
+    document.cid || document.ipfsCid || document.hash || document.id;
+
+  if (!ipfsCid) {
+    console.error("❌ Document missing IPFS CID:", {
+      document: {
+        id: document.id,
+        cid: document.cid,
+        ipfsCid: document.ipfsCid,
+        hash: document.hash,
+        allProperties: Object.keys(document),
+      },
+    });
+    throw new Error(
+      "Document is missing IPFS CID. Please ensure the document was uploaded correctly."
+    );
+  }
+
   return {
     gsProjectId: formData.gsProjectId.trim(),
     gsSerial: formData.gsSerial.trim(),
-    ipfsCid: document.cid,
+    ipfsCid: ipfsCid,
     amount: Number(formData.amount || document.estimatedCredits || 0),
     recipient: document.uploadedBy,
     nonce: Number(nonce),

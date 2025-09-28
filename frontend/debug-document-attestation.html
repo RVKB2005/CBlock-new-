@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Attestation Debug</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8fafc;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .document-card {
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+
+        .document-card.pending {
+            border-color: #f59e0b;
+            background: #fffbeb;
+        }
+
+        .document-card.attested {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .document-card.minted {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+
+        .document-card.error {
+            border-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .code-block {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        .button {
+            background: #3b82f6;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 5px;
+            transition: background 0.2s;
+        }
+
+        .button:hover {
+            background: #2563eb;
+        }
+
+        .button.success {
+            background: #16a34a;
+        }
+
+        .button.success:hover {
+            background: #15803d;
+        }
+
+        .button.warning {
+            background: #f59e0b;
+        }
+
+        .button.warning:hover {
+            background: #d97706;
+        }
+
+        .button.danger {
+            background: #ef4444;
+        }
+
+        .button.danger:hover {
+            background: #dc2626;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-attested {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-minted {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-error {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .field-check {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }
+
+        .field-check.present {
+            color: #16a34a;
+        }
+
+        .field-check.missing {
+            color: #ef4444;
+        }
+
+        .field-check .icon {
+            margin-right: 8px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Document Attestation Debug</h1>
+            <p>Diagnose and fix "No attestation data found" issues</p>
+        </div>
+
+        <div style="text-align: center; margin-bottom: 30px;">
+            <button class="button success" onclick="analyzeDocuments()">🔍 Analyze All Documents</button>
+            <button class="button warning" onclick="fixMissingAttestations()">🔧 Fix Missing Attestations</button>
+            <button class="button danger" onclick="clearAllDocuments()">🗑️ Clear All Documents</button>
+        </div>
+
+        <div id="analysis-results">
+            <p>Click "Analyze All Documents" to start diagnosis...</p>
+        </div>
+
+        <div id="document-details" style="margin-top: 30px;">
+            <!-- Document details will be populated here -->
+        </div>
+
+        <div style="margin-top: 30px;">
+            <h3>🛠️ Manual Actions</h3>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="button" onclick="createTestDocument()">📄 Create Test Document</button>
+                <button class="button" onclick="attestTestDocument()">✅ Attest Test Document</button>
+                <button class="button" onclick="showStorageContents()">💾 Show Storage Contents</button>
+                <button class="button" onclick="exportDocuments()">📤 Export Documents</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Document status constants
+        const DOCUMENT_STATUS = {
+            PENDING: "pending",
+            ATTESTED: "attested",
+            MINTED: "minted",
+            REJECTED: "rejected",
+        };
+
+        function getDocuments() {
+            try {
+                const stored = localStorage.getItem('cblock_documents');
+                if (!stored) return new Map();
+                return new Map(JSON.parse(stored));
+            } catch (error) {
+                console.error('Error loading documents:', error);
+                return new Map();
+            }
+        }
+
+        function saveDocuments(documents) {
+            try {
+                localStorage.setItem('cblock_documents', JSON.stringify(Array.from(documents.entries())));
+            } catch (error) {
+                console.error('Error saving documents:', error);
+            }
+        }
+
+        function analyzeDocuments() {
+            const documents = getDocuments();
+            const resultsDiv = document.getElementById('analysis-results');
+            const detailsDiv = document.getElementById('document-details');
+
+            if (documents.size === 0) {
+                resultsDiv.innerHTML = `
+                    <div class="document-card error">
+                        <h3>❌ No Documents Found</h3>
+                        <p>No documents found in storage. Upload some documents first.</p>
+                    </div>
+                `;
+                detailsDiv.innerHTML = '';
+                return;
+            }
+
+            let summary = {
+                total: documents.size,
+                pending: 0,
+                attested: 0,
+                minted: 0,
+                rejected: 0,
+                missingAttestation: 0,
+                incompleteAttestation: 0
+            };
+
+            let documentCards = '';
+
+            documents.forEach((doc, id) => {
+                summary.total++;
+
+                const status = doc.status || 'pending';
+                summary[status] = (summary[status] || 0) + 1;
+
+                let statusClass = 'pending';
+                let statusBadge = 'status-pending';
+                let issues = [];
+
+                if (status === 'attested') {
+                    statusClass = 'attested';
+                    statusBadge = 'status-attested';
+
+                    // Check attestation data completeness
+                    if (!doc.attestation) {
+                        issues.push('Missing attestation object');
+                        summary.missingAttestation++;
+                    } else {
+                        const requiredFields = ['signature', 'gsProjectId', 'gsSerial', 'amount', 'nonce', 'verifierAddress'];
+                        const missingFields = requiredFields.filter(field => !doc.attestation[field]);
+
+                        if (missingFields.length > 0) {
+                            issues.push(`Missing fields: ${missingFields.join(', ')}`);
+                            summary.incompleteAttestation++;
+                        }
+                    }
+                } else if (status === 'minted') {
+                    statusClass = 'minted';
+                    statusBadge = 'status-minted';
+                } else if (status === 'rejected') {
+                    statusClass = 'error';
+                    statusBadge = 'status-error';
+                }
+
+                if (issues.length > 0) {
+                    statusClass = 'error';
+                }
+
+                documentCards += `
+                    <div class="document-card ${statusClass}">
+                        <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 15px;">
+                            <h4>📄 Document ${id}</h4>
+                            <span class="status-badge ${statusBadge}">${status}</span>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <strong>Basic Info:</strong>
+                                <div class="field-check ${doc.filename ? 'present' : 'missing'}">
+                                    <span class="icon">${doc.filename ? '✅' : '❌'}</span>
+                                    Filename: ${doc.filename || 'Missing'}
+                                </div>
+                                <div class="field-check ${doc.cid ? 'present' : 'missing'}">
+                                    <span class="icon">${doc.cid ? '✅' : '❌'}</span>
+                                    CID: ${doc.cid || 'Missing'}
+                                </div>
+                                <div class="field-check ${doc.uploadedBy ? 'present' : 'missing'}">
+                                    <span class="icon">${doc.uploadedBy ? '✅' : '❌'}</span>
+                                    Uploaded By: ${doc.uploadedBy || 'Missing'}
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <strong>Attestation Data:</strong>
+                                ${doc.attestation ? `
+                                    <div class="field-check ${doc.attestation.signature ? 'present' : 'missing'}">
+                                        <span class="icon">${doc.attestation.signature ? '✅' : '❌'}</span>
+                                        Signature: ${doc.attestation.signature ? 'Present' : 'Missing'}
+                                    </div>
+                                    <div class="field-check ${doc.attestation.gsProjectId ? 'present' : 'missing'}">
+                                        <span class="icon">${doc.attestation.gsProjectId ? '✅' : '❌'}</span>
+                                        GS Project ID: ${doc.attestation.gsProjectId || 'Missing'}
+                                    </div>
+                                    <div class="field-check ${doc.attestation.gsSerial ? 'present' : 'missing'}">
+                                        <span class="icon">${doc.attestation.gsSerial ? '✅' : '❌'}</span>
+                                        GS Serial: ${doc.attestation.gsSerial || 'Missing'}
+                                    </div>
+                                    <div class="field-check ${doc.attestation.amount ? 'present' : 'missing'}">
+                                        <span class="icon">${doc.attestation.amount ? '✅' : '❌'}</span>
+                                        Amount: ${doc.attestation.amount || 'Missing'}
+                                    </div>
+                                    <div class="field-check ${doc.attestation.nonce ? 'present' : 'missing'}">
+                                        <span class="icon">${doc.attestation.nonce ? '✅' : '❌'}</span>
+                                        Nonce: ${doc.attestation.nonce || 'Missing'}
+                                    </div>
+                                    <div class="field-check ${doc.attestation.verifierAddress ? 'present' : 'missing'}">
+                                        <span class="icon">${doc.attestation.verifierAddress ? '✅' : '❌'}</span>
+                                        Verifier: ${doc.attestation.verifierAddress || 'Missing'}
+                                    </div>
+                                ` : `
+                                    <div class="field-check missing">
+                                        <span class="icon">❌</span>
+                                        No attestation data
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+                        
+                        ${issues.length > 0 ? `
+                            <div style="margin-top: 15px; padding: 10px; background: #fee2e2; border-radius: 6px;">
+                                <strong>⚠️ Issues:</strong>
+                                <ul style="margin: 5px 0; padding-left: 20px;">
+                                    ${issues.map(issue => `<li>${issue}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                        
+                        <div style="margin-top: 15px;">
+                            <button class="button" onclick="showDocumentDetails('${id}')">🔍 View Details</button>
+                            ${status === 'pending' ? `<button class="button success" onclick="attestDocument('${id}')">✅ Attest</button>` : ''}
+                            ${status === 'attested' && issues.length === 0 ? `<button class="button success" onclick="mintDocument('${id}')">🪙 Mint</button>` : ''}
+                            ${issues.length > 0 ? `<button class="button warning" onclick="fixDocument('${id}')">🔧 Fix</button>` : ''}
+                            <button class="button danger" onclick="deleteDocument('${id}')">🗑️ Delete</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            resultsDiv.innerHTML = `
+                <div class="document-card">
+                    <h3>📊 Document Analysis Summary</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px;">
+                        <div><strong>Total Documents:</strong> ${summary.total}</div>
+                        <div><strong>Pending:</strong> ${summary.pending}</div>
+                        <div><strong>Attested:</strong> ${summary.attested}</div>
+                        <div><strong>Minted:</strong> ${summary.minted}</div>
+                        <div><strong>Rejected:</strong> ${summary.rejected}</div>
+                        <div style="color: #ef4444;"><strong>Missing Attestation:</strong> ${summary.missingAttestation}</div>
+                        <div style="color: #f59e0b;"><strong>Incomplete Attestation:</strong> ${summary.incompleteAttestation}</div>
+                    </div>
+                </div>
+            `;
+
+            detailsDiv.innerHTML = documentCards;
+        }
+
+        function showDocumentDetails(id) {
+            const documents = getDocuments();
+            const doc = documents.get(id);
+
+            if (!doc) {
+                alert('Document not found!');
+                return;
+            }
+
+            const detailsWindow = window.open('', '_blank', 'width=800,height=600');
+            detailsWindow.document.write(`
+                <html>
+                <head><title>Document ${id} Details</title></head>
+                <body style="font-family: monospace; padding: 20px;">
+                    <h2>Document ${id} Details</h2>
+                    <pre>${JSON.stringify(doc, null, 2)}</pre>
+                </body>
+                </html>
+            `);
+        }
+
+        function attestDocument(id) {
+            const documents = getDocuments();
+            const doc = documents.get(id);
+
+            if (!doc) {
+                alert('Document not found!');
+                return;
+            }
+
+            // Create mock attestation data
+            const attestationData = {
+                signature: '0x' + Array(130).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join(''),
+                gsProjectId: 'GS' + Math.floor(Math.random() * 10000),
+                gsSerial: 'SER' + Math.floor(Math.random() * 10000),
+                amount: Math.floor(Math.random() * 1000) + 100,
+                nonce: Math.floor(Math.random() * 1000000),
+                verifierAddress: '0x' + Array(40).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join(''),
+                attestedAt: new Date().toISOString()
+            };
+
+            doc.status = DOCUMENT_STATUS.ATTESTED;
+            doc.attestation = attestationData;
+
+            documents.set(id, doc);
+            saveDocuments(documents);
+
+            alert(`Document ${id} has been attested with mock data!`);
+            analyzeDocuments();
+        }
+
+        function mintDocument(id) {
+            alert(`Minting functionality would be called for document ${id}. In the real app, this would trigger the minting process.`);
+        }
+
+        function fixDocument(id) {
+            const documents = getDocuments();
+            const doc = documents.get(id);
+
+            if (!doc) {
+                alert('Document not found!');
+                return;
+            }
+
+            // Fix common issues
+            if (!doc.attestation) {
+                doc.attestation = {};
+            }
+
+            const requiredFields = ['signature', 'gsProjectId', 'gsSerial', 'amount', 'nonce', 'verifierAddress'];
+            requiredFields.forEach(field => {
+                if (!doc.attestation[field]) {
+                    switch (field) {
+                        case 'signature':
+                            doc.attestation[field] = '0x' + Array(130).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+                            break;
+                        case 'gsProjectId':
+                            doc.attestation[field] = 'GS' + Math.floor(Math.random() * 10000);
+                            break;
+                        case 'gsSerial':
+                            doc.attestation[field] = 'SER' + Math.floor(Math.random() * 10000);
+                            break;
+                        case 'amount':
+                            doc.attestation[field] = Math.floor(Math.random() * 1000) + 100;
+                            break;
+                        case 'nonce':
+                            doc.attestation[field] = Math.floor(Math.random() * 1000000);
+                            break;
+                        case 'verifierAddress':
+                            doc.attestation[field] = '0x' + Array(40).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+                            break;
+                    }
+                }
+            });
+
+            if (!doc.attestation.attestedAt) {
+                doc.attestation.attestedAt = new Date().toISOString();
+            }
+
+            documents.set(id, doc);
+            saveDocuments(documents);
+
+            alert(`Document ${id} has been fixed with missing attestation data!`);
+            analyzeDocuments();
+        }
+
+        function deleteDocument(id) {
+            if (confirm(`Are you sure you want to delete document ${id}?`)) {
+                const documents = getDocuments();
+                documents.delete(id);
+                saveDocuments(documents);
+                analyzeDocuments();
+            }
+        }
+
+        function fixMissingAttestations() {
+            const documents = getDocuments();
+            let fixedCount = 0;
+
+            documents.forEach((doc, id) => {
+                if (doc.status === DOCUMENT_STATUS.ATTESTED && (!doc.attestation || !doc.attestation.signature)) {
+                    fixDocument(id);
+                    fixedCount++;
+                }
+            });
+
+            alert(`Fixed ${fixedCount} documents with missing attestation data!`);
+            analyzeDocuments();
+        }
+
+        function createTestDocument() {
+            const documents = getDocuments();
+            const id = Date.now().toString();
+
+            const testDoc = {
+                id: id,
+                filename: `test-document-${id}.pdf`,
+                cid: 'Qm' + Array(44).fill(0).map(() => Math.floor(Math.random() * 36).toString(36)).join(''),
+                uploadedBy: '0x' + Array(40).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join(''),
+                status: DOCUMENT_STATUS.PENDING,
+                createdAt: new Date().toISOString(),
+                projectName: `Test Project ${id}`,
+                estimatedCredits: Math.floor(Math.random() * 1000) + 100
+            };
+
+            documents.set(id, testDoc);
+            saveDocuments(documents);
+
+            alert(`Created test document ${id}!`);
+            analyzeDocuments();
+        }
+
+        function attestTestDocument() {
+            const documents = getDocuments();
+            const pendingDocs = Array.from(documents.entries()).filter(([id, doc]) => doc.status === DOCUMENT_STATUS.PENDING);
+
+            if (pendingDocs.length === 0) {
+                alert('No pending documents to attest. Create a test document first.');
+                return;
+            }
+
+            const [id, doc] = pendingDocs[0];
+            attestDocument(id);
+        }
+
+        function showStorageContents() {
+            const stored = localStorage.getItem('cblock_documents');
+            const detailsWindow = window.open('', '_blank', 'width=800,height=600');
+            detailsWindow.document.write(`
+                <html>
+                <head><title>Storage Contents</title></head>
+                <body style="font-family: monospace; padding: 20px;">
+                    <h2>Raw Storage Contents</h2>
+                    <pre>${stored || 'No data in storage'}</pre>
+                </body>
+                </html>
+            `);
+        }
+
+        function exportDocuments() {
+            const documents = getDocuments();
+            const data = JSON.stringify(Array.from(documents.entries()), null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'documents-export.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function clearAllDocuments() {
+            if (confirm('Are you sure you want to clear ALL documents? This cannot be undone!')) {
+                localStorage.removeItem('cblock_documents');
+                alert('All documents cleared!');
+                analyzeDocuments();
+            }
+        }
+
+        // Auto-analyze on page load
+        document.addEventListener('DOMContentLoaded', analyzeDocuments);
+    </script>
+</body>
+
+</html>

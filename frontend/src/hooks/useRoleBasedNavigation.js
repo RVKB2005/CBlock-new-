@@ -70,7 +70,7 @@ export const useRoleBasedNavigation = (user = null) => {
       // If user is an admin trying to access upload pages, redirect to admin dashboard
       if (
         userRole === "admin" &&
-        (currentPage === "mint" || currentPage === "mintCredits")
+        (currentPage === "mint" || currentPage === "upload")
       ) {
         onPageChange("admin");
         return true;
@@ -79,7 +79,7 @@ export const useRoleBasedNavigation = (user = null) => {
       // If user is a verifier trying to access upload pages, redirect to verifier dashboard
       if (
         isVerifier(currentUser) &&
-        (currentPage === "mint" || currentPage === "mintCredits")
+        (currentPage === "mint" || currentPage === "upload")
       ) {
         onPageChange("verifierDashboard");
         return true;
@@ -131,7 +131,7 @@ export const useRoleBasedNavigation = (user = null) => {
       },
       {
         name: "Upload Documents",
-        href: "mintCredits",
+        href: "upload",
         icon: "PlusCircleIcon",
         description: "Upload documents for verification",
         allowedRoles: ["individual", "business"],
@@ -207,7 +207,7 @@ export const useRoleBasedNavigation = (user = null) => {
           description:
             "Upload your business documents for verification and carbon credit minting.",
           primaryAction: "Upload Documents",
-          primaryActionPage: "mintCredits",
+          primaryActionPage: "upload",
         };
       case "individual":
       default:
@@ -216,7 +216,7 @@ export const useRoleBasedNavigation = (user = null) => {
           description:
             "Upload your environmental impact documents for verification and carbon credit minting.",
           primaryAction: "Upload Documents",
-          primaryActionPage: "mintCredits",
+          primaryActionPage: "upload",
         };
     }
   }, [userRole]);

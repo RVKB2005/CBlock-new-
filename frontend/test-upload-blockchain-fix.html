@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Blockchain Fix Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        input[type="file"] {
+            margin: 10px 0;
+            padding: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔧 Upload Blockchain Fix Test</h1>
+        <p>This test verifies that the blockchain registration issues have been fixed:</p>
+        <ul>
+            <li>Mock IPFS returns proper object structure</li>
+            <li>CID validation before blockchain registration</li>
+            <li>Toast warning function fix</li>
+        </ul>
+
+        <div class="test-section info">
+            <h3>Test File Upload</h3>
+            <input type="file" id="testFile" accept=".pdf,.txt,.jpg,.png">
+            <button onclick="testMockIPFS()">Test Mock IPFS</button>
+            <button onclick="testDocumentData()">Test Document Data</button>
+        </div>
+
+        <div class="test-section">
+            <h3>Test Controls</h3>
+            <button onclick="testToastWarning()">Test Toast Warning</button>
+            <button onclick="clearTestData()">Clear Test Data</button>
+            <button onclick="showStoredFiles()">Show Stored Files</button>
+        </div>
+
+        <div class="test-section">
+            <h3>Test Results</h3>
+            <div id="testResults" class="log">Ready to run tests...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        function log(message) {
+            const results = document.getElementById('testResults');
+            const timestamp = new Date().toLocaleTimeString();
+            results.textContent += `[${timestamp}] ${message}\n`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        async function testMockIPFS() {
+            log('🧪 Testing mock IPFS upload...');
+
+            const file = document.getElementById('testFile').files[0];
+            if (!file) {
+                log('❌ Please select a file first');
+                return;
+            }
+
+            try {
+                // Import IPFS service
+                const ipfsModule = await import('./src/services/ipfs.js');
+                const IPFSService = ipfsModule.default;
+
+                const ipfsService = new IPFSService();
+
+                // Test mock IPFS directly
+                const result = await ipfsService.uploadViaMockIPFS(file);
+
+                log('✅ Mock IPFS upload result:');
+                log(JSON.stringify(result, null, 2));
+
+                // Verify result structure
+                const requiredProperties = ['cid', 'url', 'name', 'size', 'type', 'uploadedAt'];
+                const missingProperties = requiredProperties.filter(prop => !(prop in result));
+
+                if (missingProperties.length === 0) {
+                    log('✅ All required properties present in result');
+                } else {
+                    log(`❌ Missing properties: ${missingProperties.join(', ')}`);
+                }
+
+                // Verify CID format
+                if (result.cid && result.cid.startsWith('QmMock')) {
+                    log('✅ CID has correct mock format');
+                } else {
+                    log(`❌ CID format incorrect: ${result.cid}`);
+                }
+
+                // Verify file is stored
+                const stored = localStorage.getItem(`ipfs_mock_${result.cid}`);
+                if (stored) {
+                    log('✅ File successfully stored in localStorage');
+                } else {
+                    log('❌ File not found in localStorage');
+                }
+
+            } catch (error) {
+                log(`❌ Mock IPFS test failed: ${error.message}`);
+                log(`📋 Error stack: ${error.stack}`);
+            }
+        }
+
+        async function testDocumentData() {
+            log('🧪 Testing document data preparation...');
+
+            const file = document.getElementById('testFile').files[0];
+            if (!file) {
+                log('❌ Please select a file first');
+                return;
+            }
+
+            try {
+                // Mock IPFS result
+                const mockIPFSResult = {
+                    cid: 'QmMockTestCID123456789abcdef',
+                    url: 'mock://ipfs/QmMockTestCID123456789abcdef',
+                    name: file.name,
+                    size: file.size,
+                    type: file.type,
+                    uploadedAt: new Date().toISOString(),
+                    isMock: true
+                };
+
+                // Mock metadata
+                const metadata = {
+                    projectName: 'Test Project',
+                    projectType: 'renewable_energy',
+                    description: 'Test description',
+                    location: 'Test location',
+                    estimatedCredits: 100
+                };
+
+                // Prepare document data (same logic as in document service)
+                if (!mockIPFSResult.cid) {
+                    throw new Error("IPFS upload did not return a valid CID");
+                }
+
+                const documentData = {
+                    cid: mockIPFSResult.cid,
+                    projectName: metadata.projectName,
+                    projectType: metadata.projectType || "",
+                    description: metadata.description || "",
+                    location: metadata.location || "",
+                    estimatedCredits: Number(metadata.estimatedCredits || 0),
+                };
+
+                log('✅ Document data prepared successfully:');
+                log(JSON.stringify(documentData, null, 2));
+
+                // Validate required fields (same as blockchain service)
+                if (!documentData.cid || !documentData.projectName) {
+                    log('❌ Validation failed: CID and project name are required');
+                } else {
+                    log('✅ Document data validation passed');
+                }
+
+            } catch (error) {
+                log(`❌ Document data test failed: ${error.message}`);
+            }
+        }
+
+        async function testToastWarning() {
+            log('🧪 Testing toast warning fix...');
+
+            try {
+                // Test if we can create a warning-style toast without using toast.warning
+                const mockToast = (message, options = {}) => {
+                    log(`📢 Toast: ${message}`);
+                    log(`📋 Options: ${JSON.stringify(options, null, 2)}`);
+                    return 'mock-toast-id';
+                };
+
+                // Test the fixed warning toast pattern
+                const result = mockToast('You are not registered as a verifier. You can register yourself for testing.', {
+                    icon: '⚠️',
+                    style: {
+                        background: '#fff3cd',
+                        color: '#856404',
+                        border: '1px solid #ffeaa7'
+                    }
+                });
+
+                log('✅ Toast warning pattern works correctly');
+                log(`📋 Toast ID: ${result}`);
+
+            } catch (error) {
+                log(`❌ Toast warning test failed: ${error.message}`);
+            }
+        }
+
+        function clearTestData() {
+            // Clear all mock IPFS files
+            const keys = Object.keys(localStorage);
+            const mockKeys = keys.filter(key => key.startsWith('ipfs_mock_'));
+
+            mockKeys.forEach(key => localStorage.removeItem(key));
+            localStorage.removeItem('cblock_documents');
+
+            log(`🗑️ Cleared ${mockKeys.length} mock IPFS files and document storage`);
+        }
+
+        function showStoredFiles() {
+            const keys = Object.keys(localStorage);
+            const mockKeys = keys.filter(key => key.startsWith('ipfs_mock_'));
+
+            log('📋 Stored mock IPFS files:');
+            if (mockKeys.length === 0) {
+                log('  No mock files stored');
+            } else {
+                mockKeys.forEach(key => {
+                    const cid = key.replace('ipfs_mock_', '');
+                    log(`  ${cid}`);
+                });
+            }
+
+            const documents = localStorage.getItem('cblock_documents');
+            if (documents) {
+                log('📋 Stored documents:');
+                try {
+                    const parsed = JSON.parse(documents);
+                    log(JSON.stringify(parsed, null, 2));
+                } catch (e) {
+                    log('  Error parsing documents');
+                }
+            } else {
+                log('📋 No documents stored');
+            }
+        }
+
+        // Make functions available globally
+        window.testMockIPFS = testMockIPFS;
+        window.testDocumentData = testDocumentData;
+        window.testToastWarning = testToastWarning;
+        window.clearTestData = clearTestData;
+        window.showStoredFiles = showStoredFiles;
+
+        // Auto-run basic checks on page load
+        window.addEventListener('load', () => {
+            log('🚀 Upload Blockchain Fix Test loaded');
+            log('Select a file and run tests to verify fixes');
+        });
+    </script>
+</body>
+
+</html>

@@ -39,6 +39,11 @@ class DocumentService {
       if (stored) {
         const documentsArray = JSON.parse(stored);
         this.documents = new Map(documentsArray);
+
+        // Fix any documents missing uploadedBy field (for backward compatibility)
+        setTimeout(() => {
+          this.fixDocumentsMissingUploader();
+        }, 1000); // Delay to ensure auth service is initialized
       }
     } catch (error) {
       console.error("Failed to load documents from storage:", error);
@@ -205,6 +210,10 @@ class DocumentService {
       });
 
       // Step 2: Prepare document data for blockchain registration
+      if (!ipfsResult.cid) {
+        throw new Error("IPFS upload did not return a valid CID");
+      }
+
       const documentData = {
         cid: ipfsResult.cid,
         projectName: metadata.projectName,
@@ -213,6 +222,13 @@ class DocumentService {
         location: metadata.location || "",
         estimatedCredits: Number(metadata.estimatedCredits || 0),
       };
+
+      console.log("📋 Document data for blockchain registration:", {
+        cid: documentData.cid,
+        projectName: documentData.projectName,
+        hasValidCid: !!documentData.cid,
+        cidLength: documentData.cid?.length,
+      });
 
       // Update loading message
       toastNotifications.dismiss(loadingToastId);
@@ -344,6 +360,9 @@ class DocumentService {
     } catch (error) {
       console.error("❌ Document upload failed:", error);
 
+      // Get current user for error handling (in case it wasn't defined earlier)
+      const currentUser = authService.getCurrentUser();
+
       // Use enhanced error handler for document uploads
       const processedError = errorHandler.handleDocumentUploadError(
         error,
@@ -388,9 +407,25 @@ class DocumentService {
 
         // Merge with local documents to get additional metadata
         documents = blockchainDocs.map((blockchainDoc) => {
-          const localDoc =
+          // Try multiple ways to find the local document
+          let localDoc =
             this.documents.get(blockchainDoc.id?.toString()) ||
-            this.documents.get(blockchainDoc.cid);
+            this.documents.get(blockchainDoc.cid) ||
+            this.documents.get(blockchainDoc.id);
+
+          // If not found by direct lookup, search by CID or ID match
+          if (!localDoc) {
+            for (const [key, doc] of this.documents.entries()) {
+              if (
+                doc.cid === blockchainDoc.cid ||
+                doc.id === blockchainDoc.id ||
+                doc.id === blockchainDoc.id?.toString()
+              ) {
+                localDoc = doc;
+                break;
+              }
+            }
+          }
 
           return {
             ...blockchainDoc,
@@ -409,7 +444,8 @@ class DocumentService {
               ? DOCUMENT_STATUS.ATTESTED
               : DOCUMENT_STATUS.PENDING,
 
-            // Use blockchain data as primary source
+            // Use blockchain data as primary source - FIX: Map uploader to uploadedBy
+            uploadedBy: blockchainDoc.uploader || localDoc?.uploadedBy,
             uploaderType: this.getUserTypeFromAddress(blockchainDoc.uploader),
             blockchainRegistered: true,
             source: "blockchain",
@@ -445,6 +481,21 @@ class DocumentService {
       // Apply filters
       if (filters.status) {
         documents = documents.filter((doc) => doc.status === filters.status);
+      }
+
+      // Debug: Check for documents without uploadedBy
+      const documentsWithoutUploader = documents.filter(
+        (doc) => !doc.uploadedBy
+      );
+      if (documentsWithoutUploader.length > 0) {
+        console.warn(
+          `⚠️ Found ${documentsWithoutUploader.length} documents without uploadedBy field:`,
+          documentsWithoutUploader.map((doc) => ({
+            id: doc.id,
+            cid: doc.cid,
+            source: doc.source,
+          }))
+        );
       }
 
       if (filters.uploaderType) {
@@ -489,6 +540,43 @@ class DocumentService {
 
       throw new Error(`Failed to fetch documents: ${error.message}`);
     }
+  }
+
+  /**
+   * Fix documents that are missing uploadedBy field
+   * This is a utility method to repair documents from older versions
+   */
+  fixDocumentsMissingUploader() {
+    let fixedCount = 0;
+    const currentUser = authService.getCurrentUser();
+
+    if (!currentUser) {
+      console.warn("Cannot fix documents: no current user");
+      return fixedCount;
+    }
+
+    for (const [docId, document] of this.documents.entries()) {
+      if (
+        !document.uploadedBy &&
+        document.uploaderEmail === currentUser.email
+      ) {
+        // This document belongs to the current user but is missing uploadedBy
+        document.uploadedBy = currentUser.walletAddress || currentUser.email;
+        document.updatedAt = new Date().toISOString();
+        this.documents.set(docId, document);
+        fixedCount++;
+        console.log(
+          `🔧 Fixed document ${docId}: added uploadedBy = ${document.uploadedBy}`
+        );
+      }
+    }
+
+    if (fixedCount > 0) {
+      this.saveToStorage();
+      console.log(`✅ Fixed ${fixedCount} documents missing uploadedBy field`);
+    }
+
+    return fixedCount;
   }
 
   /**
@@ -651,9 +739,50 @@ class DocumentService {
 
       console.log(`📝 Updating document ${documentId} status to: ${status}`);
 
-      const document = this.documents.get(documentId);
+      // Try to find document by ID first, then by CID, then by string conversion
+      let document = this.documents.get(documentId);
+      let actualKey = documentId;
+
       if (!document) {
-        throw new Error("Document not found");
+        // Try converting to string if it's a number
+        const stringId = documentId.toString();
+        document = this.documents.get(stringId);
+        if (document) {
+          actualKey = stringId;
+        }
+      }
+
+      if (!document) {
+        // Try to find by CID if the documentId might be a CID
+        for (const [key, doc] of this.documents.entries()) {
+          if (doc.cid === documentId || doc.id === documentId) {
+            document = doc;
+            actualKey = key;
+            break;
+          }
+        }
+      }
+
+      if (!document) {
+        console.warn(`⚠️ Document not found in local storage: ${documentId}`);
+        console.log(
+          `📋 Available documents:`,
+          Array.from(this.documents.keys())
+        );
+
+        // Create a minimal document record if it doesn't exist
+        // This can happen when documents are registered on blockchain but not locally
+        document = {
+          id: documentId,
+          cid: documentId, // Assume documentId might be a CID
+          status: DOCUMENT_STATUS.PENDING,
+          createdAt: new Date().toISOString(),
+          uploadedBy: "unknown",
+          filename: "Unknown Document",
+          source: "blockchain",
+        };
+        actualKey = documentId;
+        console.log(`📝 Created minimal document record for: ${documentId}`);
       }
 
       // Update document
@@ -664,7 +793,7 @@ class DocumentService {
         ...additionalData,
       };
 
-      this.documents.set(documentId, updatedDocument);
+      this.documents.set(actualKey, updatedDocument);
       this.saveToStorage();
 
       console.log(`✅ Document status updated successfully`);
@@ -806,6 +935,7 @@ class DocumentService {
         gsProjectId: attestationData.gsProjectId,
         gsSerial: attestationData.gsSerial,
         amount: attestationData.amount,
+        nonce: attestationData.nonce, // ✅ Add nonce for minting
         blockchainAttested: !!blockchainResult,
         blockchainTransactionHash: blockchainResult?.hash || null,
       };

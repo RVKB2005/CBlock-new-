@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Fixes Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        input[type="file"] {
+            margin: 10px 0;
+            padding: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔧 Upload Fixes Test</h1>
+        <p>This test verifies that the upload issues have been fixed:</p>
+        <ul>
+            <li>Web3.Storage DID authentication</li>
+            <li>Mock IPFS fallback</li>
+            <li>currentUser scope issue</li>
+        </ul>
+
+        <div class="test-section info">
+            <h3>Test File Upload</h3>
+            <input type="file" id="testFile" accept=".pdf,.txt,.jpg,.png">
+            <button onclick="testUpload()">Test Upload</button>
+            <button onclick="testMockUpload()">Test Mock Upload</button>
+        </div>
+
+        <div class="test-section">
+            <h3>Test Controls</h3>
+            <button onclick="checkConfiguration()">Check Configuration</button>
+            <button onclick="clearTestData()">Clear Test Data</button>
+            <button onclick="showStoredFiles()">Show Stored Files</button>
+        </div>
+
+        <div class="test-section">
+            <h3>Test Results</h3>
+            <div id="testResults" class="log">Ready to run tests...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Mock authentication service
+        const mockAuthService = {
+            getCurrentUser: () => ({
+                address: '0x1234567890123456789012345678901234567890',
+                accountType: 'business',
+                email: 'test@example.com'
+            }),
+            hasPermission: () => true
+        };
+
+        // Mock services for testing
+        const mockToastNotifications = {
+            loading: (message) => {
+                log(`🔄 Loading: ${message}`);
+                return 'toast-id';
+            },
+            success: (message) => log(`✅ Success: ${message}`),
+            error: (message) => log(`❌ Error: ${message}`),
+            dismiss: (id) => log(`🗑️ Dismissed toast: ${id}`)
+        };
+
+        const mockErrorHandler = {
+            handleDocumentUploadError: (error, userType, context) => {
+                log(`🚨 Error Handler: ${error.message} (User: ${userType})`);
+                return error;
+            }
+        };
+
+        function log(message) {
+            const results = document.getElementById('testResults');
+            const timestamp = new Date().toLocaleTimeString();
+            results.textContent += `[${timestamp}] ${message}\n`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        async function checkConfiguration() {
+            log('🔍 Checking IPFS configuration...');
+
+            // Check environment variables
+            const didKey = import.meta.env.VITE_WEB3_STORAGE_DID;
+            const legacyToken = import.meta.env.VITE_WEB3_STORAGE_TOKEN;
+
+            log(`📋 DID Key: ${didKey ? didKey.substring(0, 20) + '...' : 'Not configured'}`);
+            log(`📋 Legacy Token: ${legacyToken ? legacyToken.substring(0, 20) + '...' : 'Not configured'}`);
+
+            if (!didKey && !legacyToken) {
+                log('⚠️ No IPFS authentication configured - will use mock IPFS');
+            } else {
+                log('✅ IPFS authentication configured');
+            }
+        }
+
+        async function testMockUpload() {
+            log('🧪 Testing mock IPFS upload...');
+
+            const file = document.getElementById('testFile').files[0];
+            if (!file) {
+                log('❌ Please select a file first');
+                return;
+            }
+
+            try {
+                // Test the mock upload directly
+                const mockCid = await uploadViaMockIPFS(file);
+                log(`✅ Mock upload successful: ${mockCid}`);
+
+                // Verify file was stored
+                const stored = localStorage.getItem(`ipfs_mock_${mockCid}`);
+                if (stored) {
+                    log('✅ File successfully stored in localStorage');
+                } else {
+                    log('❌ File not found in localStorage');
+                }
+            } catch (error) {
+                log(`❌ Mock upload failed: ${error.message}`);
+            }
+        }
+
+        async function uploadViaMockIPFS(file) {
+            log("🧪 Using mock IPFS upload for development");
+
+            // Generate a mock CID based on file content
+            const fileContent = await file.arrayBuffer();
+            const hash = await crypto.subtle.digest('SHA-256', fileContent);
+            const hashArray = Array.from(new Uint8Array(hash));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            const mockCid = `QmMock${hashHex.substring(0, 40)}`;
+
+            // Store file in localStorage for retrieval
+            const reader = new FileReader();
+            return new Promise((resolve, reject) => {
+                reader.onload = () => {
+                    try {
+                        localStorage.setItem(`ipfs_mock_${mockCid}`, reader.result);
+                        log(`✅ Mock IPFS upload successful: ${mockCid}`);
+                        resolve(mockCid);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function testUpload() {
+            log('🧪 Testing document upload with fixes...');
+
+            const file = document.getElementById('testFile').files[0];
+            if (!file) {
+                log('❌ Please select a file first');
+                return;
+            }
+
+            try {
+                // Import and test the document service
+                const module = await import('./src/services/document.js');
+                const DocumentService = module.default;
+
+                // Create instance with mocked dependencies
+                const documentService = new DocumentService();
+
+                // Mock the dependencies
+                documentService.authService = mockAuthService;
+                documentService.toastNotifications = mockToastNotifications;
+                documentService.errorHandler = mockErrorHandler;
+
+                const metadata = {
+                    projectName: 'Test Project',
+                    projectDescription: 'Testing upload fixes',
+                    projectLocation: 'Test Location',
+                    projectType: 'renewable_energy'
+                };
+
+                log(`📤 Starting upload test for: ${file.name}`);
+
+                const result = await documentService.uploadDocument(file, metadata);
+
+                log('✅ Upload test successful!');
+                log(`📋 Result: ${JSON.stringify(result, null, 2)}`);
+
+            } catch (error) {
+                log(`❌ Upload test failed: ${error.message}`);
+                log(`📋 Error stack: ${error.stack}`);
+            }
+        }
+
+        function clearTestData() {
+            // Clear all mock IPFS files
+            const keys = Object.keys(localStorage);
+            const mockKeys = keys.filter(key => key.startsWith('ipfs_mock_'));
+
+            mockKeys.forEach(key => localStorage.removeItem(key));
+            localStorage.removeItem('cblock_documents');
+
+            log(`🗑️ Cleared ${mockKeys.length} mock IPFS files and document storage`);
+        }
+
+        function showStoredFiles() {
+            const keys = Object.keys(localStorage);
+            const mockKeys = keys.filter(key => key.startsWith('ipfs_mock_'));
+
+            log('📋 Stored mock IPFS files:');
+            if (mockKeys.length === 0) {
+                log('  No mock files stored');
+            } else {
+                mockKeys.forEach(key => {
+                    const cid = key.replace('ipfs_mock_', '');
+                    log(`  ${cid}`);
+                });
+            }
+
+            const documents = localStorage.getItem('cblock_documents');
+            if (documents) {
+                log('📋 Stored documents:');
+                log(documents);
+            } else {
+                log('📋 No documents stored');
+            }
+        }
+
+        // Make functions available globally
+        window.testUpload = testUpload;
+        window.testMockUpload = testMockUpload;
+        window.checkConfiguration = checkConfiguration;
+        window.clearTestData = clearTestData;
+        window.showStoredFiles = showStoredFiles;
+
+        // Auto-run configuration check
+        window.addEventListener('load', () => {
+            log('🚀 Upload Fixes Test loaded');
+            checkConfiguration();
+        });
+    </script>
+</body>
+
+</html>

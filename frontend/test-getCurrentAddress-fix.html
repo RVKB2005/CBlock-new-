@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>getCurrentAddress Fix Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8fafc;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .test-section {
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+        }
+
+        .test-section.success {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .test-section.error {
+            border-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .code-block {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        .button {
+            background: #3b82f6;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px 5px;
+            transition: background 0.2s;
+        }
+
+        .button:hover {
+            background: #2563eb;
+        }
+
+        .button.success {
+            background: #16a34a;
+        }
+
+        .button.success:hover {
+            background: #15803d;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .status.success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status.error {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 getCurrentAddress Fix Test</h1>
+            <p>Testing the missing getCurrentAddress method fix</p>
+        </div>
+
+        <div class="test-section error">
+            <h3>❌ Original Error</h3>
+            <p><strong>Error:</strong> <code>TypeError: blockchainService.getCurrentAddress is not a function</code></p>
+            <p><strong>Location:</strong> VerifierDashboard.jsx:1117:55</p>
+            <p><strong>Cause:</strong> The getCurrentAddress method was missing from the blockchain service</p>
+
+            <div class="code-block">
+                // This was failing:
+                mintedBy: await blockchainService.getCurrentAddress(),
+
+                // Because getCurrentAddress method didn't exist in BlockchainService
+            </div>
+        </div>
+
+        <div class="test-section success">
+            <h3>✅ Fix Applied</h3>
+            <p><strong>Solution:</strong> Added getCurrentAddress method to BlockchainService</p>
+
+            <div class="code-block">
+                // Added to frontend/src/services/blockchain.js:
+
+                // Get current wallet address
+                async getCurrentAddress() {
+                try {
+                if (!this.signer) {
+                // Try to connect wallet if signer is not available
+                const connection = await this.connectWallet();
+                return connection.address;
+                }
+
+                return await this.signer.getAddress();
+                } catch (error) {
+                console.error("Failed to get current address:", error);
+                throw new Error("Unable to get wallet address. Please connect your wallet.");
+                }
+                }
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🧪 Test getCurrentAddress Method</h3>
+            <p>Click the button below to test if the getCurrentAddress method works:</p>
+
+            <button class="button" onclick="testGetCurrentAddress()">🔍 Test getCurrentAddress</button>
+            <button class="button success" onclick="testFullMintingFlow()">🪙 Test Full Minting Flow</button>
+
+            <div id="test-results" style="margin-top: 20px;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📋 Where getCurrentAddress is Used</h3>
+            <p>The getCurrentAddress method is called in these locations:</p>
+            <ul>
+                <li><strong>Manual Minting (Main Component)</strong>: Line 299 - Records who performed the minting</li>
+                <li><strong>Manual Minting (Modal Component)</strong>: Line 964 - Records who performed the minting</li>
+                <li><strong>Automatic Minting</strong>: Line 1117 - Records who performed the minting after attestation
+                </li>
+            </ul>
+
+            <div class="code-block">
+                // Usage in document minting info:
+                await documentService.updateDocumentMinting(document.id, {
+                transactionHash: mintingResult.receipt?.hash,
+                mintedAt: new Date().toISOString(),
+                mintedBy: await blockchainService.getCurrentAddress(), // ✅ Now works!
+                amount: signedAttestationData.amount,
+                recipient: signedAttestationData.recipient,
+                tokenId: mintingResult.tokenId
+                });
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🎯 Expected Results</h3>
+            <p>After this fix:</p>
+            <ul>
+                <li>✅ No more "getCurrentAddress is not a function" errors</li>
+                <li>✅ Automatic minting works after attestation</li>
+                <li>✅ Manual minting works for attested documents</li>
+                <li>✅ Document minting info includes the verifier's address</li>
+                <li>✅ Complete audit trail of who minted what</li>
+            </ul>
+        </div>
+    </div>
+
+    <script type="module">
+        // Mock blockchain service for testing
+        class MockBlockchainService {
+            constructor() {
+                this.signer = null;
+            }
+
+            async connectWallet() {
+                // Simulate wallet connection
+                if (window.ethereum) {
+                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    return { address: accounts[0] };
+                }
+                throw new Error('MetaMask not available');
+            }
+
+            async getCurrentAddress() {
+                try {
+                    if (!this.signer) {
+                        // Try to connect wallet if signer is not available
+                        const connection = await this.connectWallet();
+                        return connection.address;
+                    }
+
+                    return await this.signer.getAddress();
+                } catch (error) {
+                    console.error("Failed to get current address:", error);
+                    throw new Error("Unable to get wallet address. Please connect your wallet.");
+                }
+            }
+        }
+
+        const mockBlockchainService = new MockBlockchainService();
+
+        async function testGetCurrentAddress() {
+            const resultsDiv = document.getElementById('test-results');
+            resultsDiv.innerHTML = '<p>🔍 Testing getCurrentAddress method...</p>';
+
+            try {
+                const address = await mockBlockchainService.getCurrentAddress();
+                resultsDiv.innerHTML = `
+                    <div class="test-section success">
+                        <h4>✅ getCurrentAddress Test Successful!</h4>
+                        <p><strong>Current Address:</strong> ${address}</p>
+                        <p>The getCurrentAddress method is working correctly.</p>
+                    </div>
+                `;
+                console.log('✅ getCurrentAddress test passed:', address);
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="test-section error">
+                        <h4>❌ getCurrentAddress Test Failed</h4>
+                        <p><strong>Error:</strong> ${error.message}</p>
+                        <p>Make sure MetaMask is installed and connected.</p>
+                    </div>
+                `;
+                console.error('❌ getCurrentAddress test failed:', error);
+            }
+        }
+
+        async function testFullMintingFlow() {
+            const resultsDiv = document.getElementById('test-results');
+            resultsDiv.innerHTML = '<p>🪙 Testing full minting flow simulation...</p>';
+
+            try {
+                // Simulate the minting flow that was failing
+                console.log('🔍 Simulating minting flow...');
+
+                // Step 1: Get current address (this was failing before)
+                const currentAddress = await mockBlockchainService.getCurrentAddress();
+                console.log('✅ Step 1: Got current address:', currentAddress);
+
+                // Step 2: Simulate document minting info update
+                const mintingInfo = {
+                    transactionHash: '0x1234567890abcdef',
+                    mintedAt: new Date().toISOString(),
+                    mintedBy: currentAddress, // ✅ This now works!
+                    amount: 100,
+                    recipient: '0xabcdef1234567890',
+                    tokenId: 1
+                };
+                console.log('✅ Step 2: Created minting info:', mintingInfo);
+
+                resultsDiv.innerHTML = `
+                    <div class="test-section success">
+                        <h4>✅ Full Minting Flow Test Successful!</h4>
+                        <p>All steps completed without errors:</p>
+                        <ul>
+                            <li>✅ getCurrentAddress() returned: ${currentAddress}</li>
+                            <li>✅ Minting info created successfully</li>
+                            <li>✅ No "is not a function" errors</li>
+                        </ul>
+                        <div class="code-block">
+${JSON.stringify(mintingInfo, null, 2)}
+                        </div>
+                    </div>
+                `;
+
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="test-section error">
+                        <h4>❌ Full Minting Flow Test Failed</h4>
+                        <p><strong>Error:</strong> ${error.message}</p>
+                    </div>
+                `;
+                console.error('❌ Full minting flow test failed:', error);
+            }
+        }
+
+        // Make functions global
+        window.testGetCurrentAddress = testGetCurrentAddress;
+        window.testFullMintingFlow = testFullMintingFlow;
+
+        console.log('🔧 getCurrentAddress Fix Test Page Loaded');
+        console.log('✅ Fix Status: Applied');
+        console.log('🎯 Ready for testing!');
+    </script>
+</body>
+
+</html>

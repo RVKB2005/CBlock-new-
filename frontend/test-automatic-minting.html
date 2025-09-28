@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automatic Minting After Attestation - Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8fafc;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 18px;
+        }
+
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+        }
+
+        .test-section.success {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .test-section.warning {
+            border-color: #f59e0b;
+            background: #fffbeb;
+        }
+
+        .test-section.info {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+
+        .test-section h3 {
+            margin-top: 0;
+            color: #1f2937;
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .feature-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .status.implemented {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status.testing {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .workflow-step {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            margin: 10px 0;
+            background: #f9fafb;
+            border-radius: 8px;
+            border-left: 4px solid #10b981;
+        }
+
+        .workflow-step .step-number {
+            background: #10b981;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+
+        .code-block {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+
+        .button {
+            background: #3b82f6;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px 5px;
+            transition: background 0.2s;
+        }
+
+        .button:hover {
+            background: #2563eb;
+        }
+
+        .button.success {
+            background: #10b981;
+        }
+
+        .button.success:hover {
+            background: #059669;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .alert.success {
+            background: #dcfce7;
+            border: 1px solid #10b981;
+            color: #166534;
+        }
+
+        .alert.info {
+            background: #dbeafe;
+            border: 1px solid #3b82f6;
+            color: #1e40af;
+        }
+
+        .alert.warning {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            color: #92400e;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🪙 Automatic Minting After Attestation</h1>
+            <p>Complete Implementation & Testing Guide</p>
+        </div>
+
+        <div class="test-section success">
+            <h3>✅ Implementation Status</h3>
+            <div class="alert success">
+                <strong>COMPLETE!</strong> Automatic minting functionality has been successfully implemented in the
+                VerifierDashboard component.
+            </div>
+
+            <ul class="feature-list">
+                <li>🔄 Automatic minting after successful attestation <span
+                        class="status implemented">IMPLEMENTED</span></li>
+                <li>🎯 Credits automatically allocated to uploader <span class="status implemented">IMPLEMENTED</span>
+                </li>
+                <li>🖱️ Manual mint button for attested documents <span class="status implemented">IMPLEMENTED</span>
+                </li>
+                <li>⚡ Quick mint button in document table <span class="status implemented">IMPLEMENTED</span></li>
+                <li>🔔 Real-time notifications and feedback <span class="status implemented">IMPLEMENTED</span></li>
+                <li>🛡️ Comprehensive error handling <span class="status implemented">IMPLEMENTED</span></li>
+            </ul>
+        </div>
+
+        <div class="test-section info">
+            <h3>🚀 Complete Workflow</h3>
+            <p>The enhanced attestation + minting workflow now works as follows:</p>
+
+            <div class="workflow-step">
+                <div class="step-number">1</div>
+                <div>
+                    <strong>Document Upload</strong><br>
+                    Individual/Business user uploads document → Document stored in IPFS
+                </div>
+            </div>
+
+            <div class="workflow-step">
+                <div class="step-number">2</div>
+                <div>
+                    <strong>Verifier Review</strong><br>
+                    Verifier opens VerifierDashboard → Reviews document details
+                </div>
+            </div>
+
+            <div class="workflow-step">
+                <div class="step-number">3</div>
+                <div>
+                    <strong>Attestation</strong><br>
+                    Verifier fills form (GS Project ID, Serial, Amount) → Signs with EIP-712
+                </div>
+            </div>
+
+            <div class="workflow-step">
+                <div class="step-number">4</div>
+                <div>
+                    <strong>🆕 AUTOMATIC MINTING</strong><br>
+                    Credits are automatically minted and allocated to uploader's wallet
+                </div>
+            </div>
+
+            <div class="workflow-step">
+                <div class="step-number">5</div>
+                <div>
+                    <strong>Status Update</strong><br>
+                    Document status: PENDING → ATTESTED → MINTED
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section info">
+            <h3>🔧 Key Implementation Details</h3>
+
+            <h4>1. Automatic Minting in Attestation Handler</h4>
+            <div class="code-block">
+                // After successful attestation, automatically mint credits
+                try {
+                console.log('🪙 Starting automatic credit minting...');
+
+                const mintingResult = await blockchainService.mintCarbonCreditsWithDocumentTracking(
+                signedAttestationData,
+                document.id,
+                document
+                );
+
+                toast.success(`Credits minted and allocated to ${document.uploadedBy}!`);
+
+                // Update document with minting information
+                await documentService.updateDocumentMinting(document.id, {
+                transactionHash: mintingResult.receipt?.hash,
+                mintedAt: new Date().toISOString(),
+                mintedBy: await blockchainService.getCurrentAddress(),
+                amount: signedAttestationData.amount,
+                recipient: signedAttestationData.recipient,
+                tokenId: mintingResult.tokenId
+                });
+
+                } catch (mintingError) {
+                // Attestation succeeds even if minting fails
+                toast.error(`Attestation successful, but minting failed: ${mintingError.message}`);
+                }
+            </div>
+
+            <h4>2. Manual Minting Function</h4>
+            <div class="code-block">
+                const handleMinting = useCallback(async (document) => {
+                if (document.status !== DOCUMENT_STATUS.ATTESTED) {
+                toast.error('Document must be attested before minting');
+                return;
+                }
+
+                // Prepare attestation data for minting
+                const attestationData = {
+                gsProjectId: document.attestation.gsProjectId,
+                gsSerial: document.attestation.gsSerial,
+                ipfsCid: document.cid,
+                amount: document.attestation.amount,
+                recipient: document.uploadedBy, // 🎯 Credits go to uploader
+                nonce: document.attestation.nonce,
+                signature: document.attestation.signature
+                };
+
+                const mintingResult = await blockchainService.mintCarbonCreditsWithDocumentTracking(
+                attestationData,
+                document.id,
+                document
+                );
+
+                // Update document and refresh list
+                }, [loadDocuments]);
+            </div>
+
+            <h4>3. Enhanced UI Components</h4>
+            <div class="code-block">
+                {/* Mint Button for Attested Documents */}
+                {isAttested && (
+                &lt;button
+                onClick={() => handleMinting(document)}
+                className="bg-emerald-600 text-white px-6 py-2 rounded-lg hover:bg-emerald-700"
+                &gt;
+                🪙 Mint Credits
+                &lt;/button&gt;
+                )}
+
+                {/* Quick Mint in Table */}
+                {document.status === DOCUMENT_STATUS.ATTESTED && (
+                &lt;button onClick={() => onMint(document)}&gt;
+                Mint
+                &lt;/button&gt;
+                )}
+            </div>
+        </div>
+
+        <div class="test-section warning">
+            <h3>🧪 Testing Instructions</h3>
+
+            <div class="alert info">
+                <strong>Prerequisites:</strong> Make sure your local blockchain is running and you have test accounts
+                set up.
+            </div>
+
+            <h4>Test Scenario 1: Automatic Minting</h4>
+            <ol>
+                <li>Start the React app: <code>npm start</code></li>
+                <li>Connect as Individual/Business user</li>
+                <li>Upload a document with project details</li>
+                <li>Switch to Verifier role</li>
+                <li>Open VerifierDashboard</li>
+                <li>Click "View Details" on the uploaded document</li>
+                <li>Fill attestation form (GS Project ID, Serial, Amount)</li>
+                <li>Click "Attest Document"</li>
+                <li><strong>Verify:</strong> Credits are automatically minted and allocated</li>
+                <li><strong>Check:</strong> Document status shows "MINTED"</li>
+            </ol>
+
+            <h4>Test Scenario 2: Manual Minting</h4>
+            <ol>
+                <li>Find a document with "ATTESTED" status</li>
+                <li>Click "View Details" to open modal</li>
+                <li>Click the "Mint Credits" button</li>
+                <li><strong>Verify:</strong> Credits are minted and allocated</li>
+                <li><strong>Check:</strong> Document status updates to "MINTED"</li>
+            </ol>
+
+            <h4>Test Scenario 3: Quick Mint from Table</h4>
+            <ol>
+                <li>In the documents table, find attested documents</li>
+                <li>Look for the "Mint" button in the Actions column</li>
+                <li>Click the "Mint" button</li>
+                <li><strong>Verify:</strong> Credits are minted without opening modal</li>
+            </ol>
+        </div>
+
+        <div class="test-section success">
+            <h3>🎯 Expected Results</h3>
+
+            <ul class="feature-list">
+                <li>✅ <strong>Seamless Process:</strong> One-click attestation + minting</li>
+                <li>✅ <strong>Automatic Allocation:</strong> Credits go directly to uploader's wallet</li>
+                <li>✅ <strong>Real-time Feedback:</strong> Toast notifications for all steps</li>
+                <li>✅ <strong>Status Tracking:</strong> Document status progression visible</li>
+                <li>✅ <strong>Error Handling:</strong> Graceful fallbacks if minting fails</li>
+                <li>✅ <strong>Manual Override:</strong> Mint button available for attested docs</li>
+                <li>✅ <strong>Quick Actions:</strong> Mint button in table for efficiency</li>
+            </ul>
+        </div>
+
+        <div class="test-section info">
+            <h3>🔍 Verification Checklist</h3>
+
+            <div class="alert warning">
+                <strong>Important:</strong> Test with different user roles to ensure proper access controls.
+            </div>
+
+            <h4>Frontend Verification</h4>
+            <ul>
+                <li>□ Attestation form works correctly</li>
+                <li>□ Automatic minting triggers after attestation</li>
+                <li>□ Manual mint button appears for attested documents</li>
+                <li>□ Quick mint button works in table view</li>
+                <li>□ Toast notifications show progress and results</li>
+                <li>□ Document status updates correctly</li>
+                <li>□ Error messages display for failed operations</li>
+            </ul>
+
+            <h4>Blockchain Verification</h4>
+            <ul>
+                <li>□ Credits are minted on blockchain</li>
+                <li>□ Credits are allocated to correct recipient</li>
+                <li>□ Transaction hashes are recorded</li>
+                <li>□ Token IDs are generated and stored</li>
+                <li>□ Duplicate minting is prevented</li>
+            </ul>
+
+            <h4>User Experience Verification</h4>
+            <ul>
+                <li>□ Process is intuitive and fast</li>
+                <li>□ Loading states provide feedback</li>
+                <li>□ Error states are handled gracefully</li>
+                <li>□ Success states are clearly communicated</li>
+                <li>□ Users can track their credit balance</li>
+            </ul>
+        </div>
+
+        <div class="test-section success">
+            <h3>🎉 Implementation Complete!</h3>
+
+            <div class="alert success">
+                <strong>SUCCESS!</strong> The automatic minting functionality is now fully implemented and ready for
+                testing.
+            </div>
+
+            <p><strong>Key Benefits Achieved:</strong></p>
+            <ul>
+                <li>🚀 <strong>Streamlined Workflow:</strong> Attestation + minting in one step</li>
+                <li>⚡ <strong>Improved Efficiency:</strong> Reduced verifier workload</li>
+                <li>🎯 <strong>Better UX:</strong> Immediate credit allocation to users</li>
+                <li>🛡️ <strong>Robust System:</strong> Comprehensive error handling</li>
+                <li>📊 <strong>Complete Tracking:</strong> Full audit trail maintained</li>
+            </ul>
+
+            <div style="text-align: center; margin-top: 30px;">
+                <button class="button success" onclick="window.location.href='http://localhost:3000'">
+                    🚀 Test the Implementation
+                </button>
+                <button class="button" onclick="window.open('http://localhost:3000/verifier', '_blank')">
+                    🔍 Open Verifier Dashboard
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Add some interactive functionality
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('🪙 Automatic Minting Test Page Loaded');
+            console.log('✅ Implementation Status: COMPLETE');
+            console.log('🎯 Ready for testing!');
+
+            // Add click handlers for test buttons
+            const buttons = document.querySelectorAll('.button');
+            buttons.forEach(button => {
+                button.addEventListener('click', function () {
+                    console.log('Button clicked:', this.textContent);
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>

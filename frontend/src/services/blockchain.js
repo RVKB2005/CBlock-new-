@@ -201,6 +201,24 @@ class BlockchainService {
     }
   }
 
+  // Get current wallet address
+  async getCurrentAddress() {
+    try {
+      if (!this.signer) {
+        // Try to connect wallet if signer is not available
+        const connection = await this.connectWallet();
+        return connection.address;
+      }
+
+      return await this.signer.getAddress();
+    } catch (error) {
+      console.error("Failed to get current address:", error);
+      throw new Error(
+        "Unable to get wallet address. Please connect your wallet."
+      );
+    }
+  }
+
   // Initialize contracts with signer for transactions
   async initializeContractsWithSigner() {
     if (!this.signer) return;
@@ -328,8 +346,16 @@ class BlockchainService {
   // Mint carbon credits with verifier attestation
   async mintCarbonCredits(attestationData) {
     try {
+      // Ensure wallet is connected and contracts are initialized
+      if (!this.signer) {
+        console.log("🔗 Signer not available, connecting wallet...");
+        await this.connectWallet();
+      }
+
       if (!this.contracts.carbonSigner) {
-        throw new Error("Carbon contract with signer not initialized");
+        throw new Error(
+          "Carbon contract with signer not initialized. Please connect your wallet."
+        );
       }
 
       const {
@@ -337,8 +363,10 @@ class BlockchainService {
         gsProjectId,
         gsSerial,
         vintage,
-        quantity,
-        ipfsHash,
+        amount,
+        quantity = amount, // Support both amount and quantity for backward compatibility
+        ipfsCid,
+        ipfsHash = ipfsCid, // Support both ipfsCid and ipfsHash for backward compatibility
         nonce,
         signature,
       } = attestationData;
@@ -347,8 +375,8 @@ class BlockchainService {
         recipient,
         gsProjectId,
         gsSerial,
-        ipfsHash,
-        quantity: quantity.toString(),
+        ipfsHash: ipfsHash || ipfsCid,
+        quantity: (quantity || amount).toString(),
       });
 
       // Show transaction pending notification
@@ -363,8 +391,8 @@ class BlockchainService {
             this.contracts.carbonSigner.mintWithAttestation(
               gsProjectId,
               gsSerial,
-              ipfsHash,
-              BigInt(quantity), // Use raw quantity as BigInt - not parseEther
+              ipfsHash || ipfsCid,
+              BigInt(quantity || amount), // Use raw quantity/amount as BigInt - not parseEther
               recipient,
               signature,
               gasPrice ? { gasPrice } : {}
@@ -405,8 +433,32 @@ class BlockchainService {
         });
       }
     } catch (error) {
-      console.error("Error minting carbon credits:", error);
-      throw error;
+      console.error("Error minting carbon credits:", {
+        message: error.message,
+        code: error.code,
+        reason: error.reason,
+        data: error.data,
+        stack: error.stack,
+      });
+
+      // Provide more user-friendly error messages
+      let userMessage = error.message;
+      if (error.code === "CALL_EXCEPTION") {
+        userMessage =
+          "Contract call failed. Please check if the contract is deployed and your wallet is connected.";
+      } else if (error.code === "INSUFFICIENT_FUNDS") {
+        userMessage =
+          "Insufficient funds for transaction. Please add more ETH to your wallet.";
+      } else if (error.code === "USER_REJECTED") {
+        userMessage = "Transaction was rejected by user.";
+      } else if (error.message.includes("signer")) {
+        userMessage =
+          "Wallet not connected. Please connect your wallet and try again.";
+      }
+
+      const enhancedError = new Error(userMessage);
+      enhancedError.originalError = error;
+      throw enhancedError;
     }
   }
 
@@ -426,7 +478,7 @@ class BlockchainService {
       console.log("🪙 Minting carbon credits with document tracking:", {
         documentId,
         recipient: attestationData.recipient,
-        quantity: attestationData.quantity,
+        amount: attestationData.amount || attestationData.quantity,
       });
 
       // First, mint the credits using existing method
@@ -495,11 +547,31 @@ class BlockchainService {
 
       return enhancedResult;
     } catch (error) {
-      console.error(
-        "Error minting carbon credits with document tracking:",
-        error
-      );
-      throw error;
+      console.error("Error minting carbon credits with document tracking:", {
+        message: error.message,
+        code: error.code,
+        reason: error.reason,
+        data: error.data,
+        documentId,
+        recipient: attestationData.recipient,
+      });
+
+      // Provide more user-friendly error messages
+      let userMessage = error.message;
+      if (error.message && error.message.includes("signer")) {
+        userMessage =
+          "Wallet not connected. Please connect your wallet and try again.";
+      } else if (
+        error.message &&
+        error.message.includes("Contract call failed")
+      ) {
+        userMessage =
+          "Contract interaction failed. Please check your network connection and try again.";
+      }
+
+      const enhancedError = new Error(userMessage);
+      enhancedError.originalError = error;
+      throw enhancedError;
     }
   }
 
@@ -762,10 +834,26 @@ class BlockchainService {
    */
   async registerDocument(documentData) {
     try {
+      // Ensure wallet is connected and contracts are initialized
       if (!this.contracts.documentRegistrySigner) {
-        throw new Error(
-          "DocumentRegistry contract with signer not initialized. Please ensure the contract is deployed and configured."
+        console.log(
+          "📝 DocumentRegistry signer not initialized, connecting wallet..."
         );
+
+        try {
+          await this.getSigner();
+
+          // Double-check after initialization
+          if (!this.contracts.documentRegistrySigner) {
+            throw new Error(
+              "DocumentRegistry contract could not be initialized. Please check contract deployment and wallet connection."
+            );
+          }
+        } catch (walletError) {
+          throw new Error(
+            `Wallet connection required for blockchain registration: ${walletError.message}`
+          );
+        }
       }
 
       const {
@@ -1038,6 +1126,11 @@ class BlockchainService {
    */
   async getNonce(address) {
     try {
+      if (!address) {
+        console.error("Error getting nonce: Address is required");
+        throw new Error("Address is required for nonce lookup");
+      }
+
       if (!this.contracts.carbon) {
         throw new Error("Carbon contract not initialized");
       }
@@ -1046,7 +1139,10 @@ class BlockchainService {
       return Number(nonce);
     } catch (error) {
       console.error("Error getting nonce:", error);
-      // Return 0 as fallback
+      // Return 0 as fallback only for contract errors, not validation errors
+      if (error.message.includes("Address is required")) {
+        throw error;
+      }
       return 0;
     }
   }

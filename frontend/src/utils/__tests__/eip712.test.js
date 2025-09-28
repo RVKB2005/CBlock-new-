@@ -245,11 +245,27 @@ describe("EIP-712 Utilities", () => {
     });
 
     it("accepts valid IPFS CID formats", () => {
-      const qmCid = { ...mockAttestationData, ipfsCid: "QmTestCID123" };
-      const bafyCid = { ...mockAttestationData, ipfsCid: "bafyTestCID123" };
+      const qmCid = {
+        ...mockAttestationData,
+        ipfsCid: "QmTestCID123456789012345678901234567890123456",
+      };
+      const bafyCid = {
+        ...mockAttestationData,
+        ipfsCid: "bafyTestCID123456789012345678901234567890123456",
+      };
+      const bafCid = {
+        ...mockAttestationData,
+        ipfsCid: "bafTestCID123456789012345678901234567890123456",
+      };
+      const k51Cid = {
+        ...mockAttestationData,
+        ipfsCid: "k51TestCID123456789012345678901234567890123456",
+      };
 
       expect(() => validateAttestationData(qmCid)).not.toThrow();
       expect(() => validateAttestationData(bafyCid)).not.toThrow();
+      expect(() => validateAttestationData(bafCid)).not.toThrow();
+      expect(() => validateAttestationData(k51Cid)).not.toThrow();
     });
   });
 

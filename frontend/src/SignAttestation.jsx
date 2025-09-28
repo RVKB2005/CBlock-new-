@@ -40,7 +40,7 @@ export default function SignAttestation({ onSigned, uploadedData, uploaderAddres
       setFormData(prev => ({
         ...prev,
         ipfsCid: uploadedData.cid,
-        recipient: uploaderAddress || '' // Auto-populate recipient with uploader address
+        recipient: uploaderAddress || uploadedData.uploaderAddress || '' // Auto-populate recipient with uploader address
       }));
     }
   }, [uploadedData, uploaderAddress]);
@@ -107,8 +107,8 @@ export default function SignAttestation({ onSigned, uploadedData, uploaderAddres
       if (isRegisteredVerifier) {
         toast.success('✅ You are registered as a verifier!');
       } else {
-        // Using toast.warning() for warning messages
-        toast.warning('You are not registered as a verifier. You can register yourself for testing.', {
+        // Using toast() with custom styling for warning messages
+        toast('You are not registered as a verifier. You can register yourself for testing.', {
           icon: '⚠️',
           style: {
             background: '#fff3cd',
@@ -695,23 +695,41 @@ export default function SignAttestation({ onSigned, uploadedData, uploaderAddres
           <WalletIcon className="w-4 h-4 inline mr-2" />
           Recipient Address (Project Owner)
         </label>
-        <input
-          type="text"
-          name="recipient"
-          value={formData.recipient || ''}
-          onChange={handleInputChange}
-          placeholder="0x742d35Cc6634C0532925a3b8D4C9db96590c6C87"
-          className={`input-field ${validationErrors.recipient ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : ''}`}
-        />
+        <div className="relative">
+          <input
+            type="text"
+            name="recipient"
+            value={formData.recipient || ''}
+            onChange={handleInputChange}
+            placeholder="0x742d35Cc6634C0532925a3b8D4C9db96590c6C87"
+            readOnly={!!(uploaderAddress || uploadedData?.uploaderAddress)}
+            className={`input-field ${(uploaderAddress || uploadedData?.uploaderAddress)
+              ? 'bg-green-50 border-green-300 text-green-800 cursor-not-allowed'
+              : ''
+              } ${validationErrors.recipient ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : ''}`}
+          />
+          {(uploaderAddress || uploadedData?.uploaderAddress) && (
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+              <CheckCircleIcon className="w-5 h-5 text-green-600" />
+            </div>
+          )}
+        </div>
         {validationErrors.recipient && (
           <p className="mt-1 text-sm text-red-600 flex items-center">
             <ExclamationTriangleIcon className="w-4 h-4 mr-1" />
             {validationErrors.recipient}
           </p>
         )}
-        <p className="text-xs text-carbon-600">
-          The Ethereum address that will receive the carbon credits (usually the project owner)
-        </p>
+        {(uploaderAddress || uploadedData?.uploaderAddress) ? (
+          <p className="text-xs text-green-700 flex items-center">
+            <CheckCircleIcon className="w-3 h-3 mr-1" />
+            Auto-filled from document uploader ({uploadedData?.uploaderName || 'Project Owner'})
+          </p>
+        ) : (
+          <p className="text-xs text-carbon-600">
+            The Ethereum address that will receive the carbon credits (usually the project owner)
+          </p>
+        )}
       </div>
 
       {/* Access Restriction Message */}

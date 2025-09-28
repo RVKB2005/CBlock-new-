@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pinata IPFS Integration Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        input[type="file"] {
+            margin: 10px 0;
+            padding: 5px;
+        }
+
+        .config-info {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔧 Pinata IPFS Integration Test</h1>
+        <p>This test verifies that the Pinata IPFS integration is working correctly.</p>
+
+        <div class="test-section info">
+            <h3>Configuration Status</h3>
+            <div id="configStatus" class="config-info">Loading configuration...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>Test File Upload</h3>
+            <input type="file" id="testFile" accept=".pdf,.txt,.jpg,.png">
+            <button onclick="testFileUpload()">Test File Upload</button>
+            <button onclick="testJSONUpload()">Test JSON Upload</button>
+        </div>
+
+        <div class="test-section">
+            <h3>Test Controls</h3>
+            <button onclick="testConnection()">Test Pinata Connection</button>
+            <button onclick="testUploadService()">Test Upload Service</button>
+            <button onclick="clearTestData()">Clear Test Data</button>
+        </div>
+
+        <div class="test-section">
+            <h3>Test Results</h3>
+            <div id="testResults" class="log">Ready to run tests...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        function log(message) {
+            const results = document.getElementById('testResults');
+            const timestamp = new Date().toLocaleTimeString();
+            results.textContent += `[${timestamp}] ${message}\n`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        async function updateConfigStatus() {
+            try {
+                // Import the IPFS service
+                const ipfsModule = await import('./src/services/ipfs.js');
+                const ipfsService = ipfsModule.default;
+
+                const status = ipfsService.getUploadStatus();
+                const info = ipfsService.getPinataInfo();
+
+                const configDiv = document.getElementById('configStatus');
+
+                if (status.status === 'ready') {
+                    configDiv.className = 'config-info success';
+                    configDiv.innerHTML = `
+                        <strong>✅ Pinata Configuration: Ready</strong><br>
+                        Service: ${info.service}<br>
+                        Auth Method: ${status.configType}<br>
+                        Has JWT: ${info.hasJWT ? 'Yes' : 'No'}<br>
+                        Has API Key: ${info.hasApiKey ? 'Yes' : 'No'}<br>
+                        Gateway: ${info.gatewayUrl}
+                    `;
+                } else {
+                    configDiv.className = 'config-info error';
+                    configDiv.innerHTML = `
+                        <strong>❌ Configuration Error</strong><br>
+                        ${status.message}
+                    `;
+                }
+            } catch (error) {
+                const configDiv = document.getElementById('configStatus');
+                configDiv.className = 'config-info error';
+                configDiv.innerHTML = `<strong>❌ Error loading configuration:</strong><br>${error.message}`;
+            }
+        }
+
+        async function testConnection() {
+            log('🔍 Testing Pinata connection...');
+
+            try {
+                const ipfsModule = await import('./src/services/ipfs.js');
+                const ipfsService = ipfsModule.default;
+
+                const result = await ipfsService.testConnection();
+
+                if (result.success) {
+                    log('✅ Pinata connection successful!');
+                    log(`📋 Response: ${result.message}`);
+                } else {
+                    log(`❌ Pinata connection failed: ${result.error}`);
+                }
+            } catch (error) {
+                log(`❌ Connection test error: ${error.message}`);
+            }
+        }
+
+        async function testUploadService() {
+            log('🧪 Testing upload service...');
+
+            try {
+                const ipfsModule = await import('./src/services/ipfs.js');
+                const ipfsService = ipfsModule.default;
+
+                const result = await ipfsService.testUpload();
+
+                if (result.success) {
+                    log('✅ Upload service test successful!');
+                    log(`📋 CID: ${result.cid}`);
+                    log(`📋 URL: ${result.url}`);
+                } else {
+                    log(`❌ Upload service test failed: ${result.error}`);
+                }
+            } catch (error) {
+                log(`❌ Upload service test error: ${error.message}`);
+            }
+        }
+
+        async function testFileUpload() {
+            const file = document.getElementById('testFile').files[0];
+            if (!file) {
+                log('❌ Please select a file first');
+                return;
+            }
+
+            log(`🧪 Testing file upload: ${file.name} (${file.size} bytes)`);
+
+            try {
+                const ipfsModule = await import('./src/services/ipfs.js');
+                const ipfsService = ipfsModule.default;
+
+                const result = await ipfsService.uploadFile(file);
+
+                log('✅ File upload successful!');
+                log(`📋 CID: ${result.cid}`);
+                log(`📋 URL: ${result.url}`);
+                log(`📋 Gateway: ${result.gateway}`);
+                log(`📋 Method: ${result.method}`);
+
+                if (result.pinSize) {
+                    log(`📋 Pin Size: ${result.pinSize} bytes`);
+                }
+
+                // Test file retrieval
+                log('🔍 Testing file retrieval...');
+                const retrievedFile = await ipfsService.getFile(result.cid);
+                log(`✅ File retrieved successfully from: ${retrievedFile.gateway}`);
+
+            } catch (error) {
+                log(`❌ File upload failed: ${error.message}`);
+                log(`📋 Error details: ${error.stack}`);
+            }
+        }
+
+        async function testJSONUpload() {
+            log('🧪 Testing JSON metadata upload...');
+
+            try {
+                const ipfsModule = await import('./src/services/ipfs.js');
+                const ipfsService = ipfsModule.default;
+
+                const testData = {
+                    name: "Test Carbon Credit",
+                    description: "Test metadata for Pinata integration",
+                    attributes: [
+                        { trait_type: "Test", value: "Pinata Integration" },
+                        { trait_type: "Timestamp", value: new Date().toISOString() }
+                    ],
+                    properties: {
+                        testId: Math.random().toString(36).substr(2, 9),
+                        service: "Pinata",
+                        uploadedAt: new Date().toISOString()
+                    }
+                };
+
+                const result = await ipfsService.uploadJSON(testData);
+
+                log('✅ JSON upload successful!');
+                log(`📋 CID: ${result.cid}`);
+                log(`📋 URL: ${result.url}`);
+                log(`📋 Method: ${result.method}`);
+
+                // Test JSON retrieval
+                log('🔍 Testing JSON retrieval...');
+                const retrievedData = await ipfsService.fetchMetadata(result.cid);
+
+                if (retrievedData && retrievedData.name === testData.name) {
+                    log('✅ JSON retrieval and validation successful!');
+                } else {
+                    log('⚠️ JSON retrieved but validation failed');
+                }
+
+            } catch (error) {
+                log(`❌ JSON upload failed: ${error.message}`);
+            }
+        }
+
+        function clearTestData() {
+            // Clear mock IPFS data
+            const keys = Object.keys(localStorage);
+            const mockKeys = keys.filter(key => key.startsWith('ipfs_mock_'));
+
+            mockKeys.forEach(key => localStorage.removeItem(key));
+
+            log(`🗑️ Cleared ${mockKeys.length} mock IPFS files from localStorage`);
+        }
+
+        // Make functions available globally
+        window.testConnection = testConnection;
+        window.testUploadService = testUploadService;
+        window.testFileUpload = testFileUpload;
+        window.testJSONUpload = testJSONUpload;
+        window.clearTestData = clearTestData;
+
+        // Auto-run configuration check on page load
+        window.addEventListener('load', () => {
+            log('🚀 Pinata IPFS Integration Test loaded');
+            updateConfigStatus();
+        });
+    </script>
+</body>
+
+</html>

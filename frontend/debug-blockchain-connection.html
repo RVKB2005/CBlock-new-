@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blockchain Connection Debug</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8fafc;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .test-section {
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+        }
+
+        .test-section.success {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .test-section.error {
+            border-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .test-section.warning {
+            border-color: #f59e0b;
+            background: #fffbeb;
+        }
+
+        .code-block {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        .button {
+            background: #3b82f6;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px 5px;
+            transition: background 0.2s;
+        }
+
+        .button:hover {
+            background: #2563eb;
+        }
+
+        .button.success {
+            background: #16a34a;
+        }
+
+        .button.success:hover {
+            background: #15803d;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .status.success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status.error {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .status.warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Blockchain Connection Debug</h1>
+            <p>Diagnose blockchain service and contract connection issues</p>
+        </div>
+
+        <div class="test-section" id="metamask-section">
+            <h3>1. MetaMask Connection <span class="status" id="metamask-status">Checking...</span></h3>
+            <div id="metamask-result">Checking MetaMask availability...</div>
+        </div>
+
+        <div class="test-section" id="network-section">
+            <h3>2. Network Configuration <span class="status" id="network-status">Checking...</span></h3>
+            <div id="network-result">Checking network connection...</div>
+        </div>
+
+        <div class="test-section" id="contracts-section">
+            <h3>3. Contract Addresses <span class="status" id="contracts-status">Checking...</span></h3>
+            <div id="contracts-result">Checking contract configuration...</div>
+        </div>
+
+        <div class="test-section" id="contract-calls-section">
+            <h3>4. Contract Calls <span class="status" id="contract-calls-status">Checking...</span></h3>
+            <div id="contract-calls-result">Testing contract method calls...</div>
+        </div>
+
+        <div class="test-section" id="minting-section">
+            <h3>5. Minting Function Test <span class="status" id="minting-status">Checking...</span></h3>
+            <div id="minting-result">Testing minting function availability...</div>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <button class="button" onclick="runDiagnostics()">🔍 Run Full Diagnostics</button>
+            <button class="button success" onclick="testContractCall()">🧪 Test Contract Call</button>
+        </div>
+
+        <div class="test-section">
+            <h3>📋 Environment Configuration</h3>
+            <div class="code-block" id="env-config">Loading environment configuration...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { ethers } from 'https://cdn.skypack.dev/ethers@6.7.1';
+
+        // Environment configuration (from .env)
+        const config = {
+            CHAIN_ID: 11155111,
+            CARBON_ADDRESS: "0xe74f9e14F5858a92eD59ECF21866afc42101a45E",
+            MARKETPLACE_ADDRESS: "0x076d107Ca3757C37e63cC894F2F75E068B975A97",
+            VERIFIER_REGISTRY_ADDRESS: "0xD009D4EA4B9f546261433a75A32353a60d750200",
+            DOCUMENT_REGISTRY_ADDRESS: "0xd6B6223a9E59cd960bb0e6E31360B56D8536A90e"
+        };
+
+        // Simple Carbon Credit ABI for testing
+        const CarbonCreditABI = [
+            "function name() view returns (string)",
+            "function symbol() view returns (string)",
+            "function totalSupply(uint256 id) view returns (uint256)",
+            "function balanceOf(address account, uint256 id) view returns (uint256)",
+            "function mintWithAttestation(string gsProjectId, string gsSerial, string ipfsHash, uint256 quantity, address recipient, bytes signature) external"
+        ];
+
+        let provider = null;
+        let signer = null;
+        let carbonContract = null;
+
+        function updateStatus(sectionId, statusId, status, message) {
+            const section = document.getElementById(sectionId);
+            const statusEl = document.getElementById(statusId);
+            const resultEl = document.getElementById(sectionId.replace('-section', '-result'));
+
+            section.className = `test-section ${status}`;
+            statusEl.className = `status ${status}`;
+            statusEl.textContent = status === 'success' ? '✅ OK' : status === 'error' ? '❌ Error' : '⚠️ Warning';
+            resultEl.innerHTML = message;
+        }
+
+        async function checkMetaMask() {
+            try {
+                if (!window.ethereum) {
+                    throw new Error('MetaMask not installed');
+                }
+
+                const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                const isConnected = accounts.length > 0;
+
+                if (isConnected) {
+                    updateStatus('metamask-section', 'metamask-status', 'success',
+                        `✅ MetaMask connected<br>Account: ${accounts[0]}`);
+                } else {
+                    updateStatus('metamask-section', 'metamask-status', 'warning',
+                        '⚠️ MetaMask available but not connected<br><button onclick="connectWallet()">Connect Wallet</button>');
+                }
+
+                return isConnected;
+            } catch (error) {
+                updateStatus('metamask-section', 'metamask-status', 'error',
+                    `❌ MetaMask Error: ${error.message}`);
+                return false;
+            }
+        }
+
+        async function checkNetwork() {
+            try {
+                provider = new ethers.BrowserProvider(window.ethereum);
+                const network = await provider.getNetwork();
+
+                console.log('Current network:', network);
+
+                if (network.chainId === BigInt(config.CHAIN_ID)) {
+                    updateStatus('network-section', 'network-status', 'success',
+                        `✅ Connected to Sepolia Testnet<br>Chain ID: ${network.chainId}<br>Network: ${network.name}`);
+                    return true;
+                } else {
+                    updateStatus('network-section', 'network-status', 'error',
+                        `❌ Wrong network<br>Current: ${network.chainId}<br>Expected: ${config.CHAIN_ID}<br><button onclick="switchNetwork()">Switch to Sepolia</button>`);
+                    return false;
+                }
+            } catch (error) {
+                updateStatus('network-section', 'network-status', 'error',
+                    `❌ Network Error: ${error.message}`);
+                return false;
+            }
+        }
+
+        async function checkContracts() {
+            try {
+                const addresses = [
+                    { name: 'Carbon Credit', address: config.CARBON_ADDRESS },
+                    { name: 'Marketplace', address: config.MARKETPLACE_ADDRESS },
+                    { name: 'Verifier Registry', address: config.VERIFIER_REGISTRY_ADDRESS },
+                    { name: 'Document Registry', address: config.DOCUMENT_REGISTRY_ADDRESS }
+                ];
+
+                let results = '<ul>';
+                let allValid = true;
+
+                for (const { name, address } of addresses) {
+                    if (address && address !== '0x0000000000000000000000000000000000000000') {
+                        const code = await provider.getCode(address);
+                        if (code !== '0x') {
+                            results += `<li>✅ ${name}: ${address} (Contract deployed)</li>`;
+                        } else {
+                            results += `<li>❌ ${name}: ${address} (No contract code)</li>`;
+                            allValid = false;
+                        }
+                    } else {
+                        results += `<li>❌ ${name}: Not configured</li>`;
+                        allValid = false;
+                    }
+                }
+                results += '</ul>';
+
+                updateStatus('contracts-section', 'contracts-status', allValid ? 'success' : 'error', results);
+                return allValid;
+            } catch (error) {
+                updateStatus('contracts-section', 'contracts-status', 'error',
+                    `❌ Contract Check Error: ${error.message}`);
+                return false;
+            }
+        }
+
+        async function testContractCalls() {
+            try {
+                if (!provider) {
+                    throw new Error('Provider not initialized');
+                }
+
+                carbonContract = new ethers.Contract(config.CARBON_ADDRESS, CarbonCreditABI, provider);
+
+                let results = '<ul>';
+                let allWorking = true;
+
+                try {
+                    const name = await carbonContract.name();
+                    results += `<li>✅ Contract name: ${name}</li>`;
+                } catch (error) {
+                    results += `<li>❌ name() failed: ${error.message}</li>`;
+                    allWorking = false;
+                }
+
+                try {
+                    const symbol = await carbonContract.symbol();
+                    results += `<li>✅ Contract symbol: ${symbol}</li>`;
+                } catch (error) {
+                    results += `<li>❌ symbol() failed: ${error.message}</li>`;
+                    allWorking = false;
+                }
+
+                results += '</ul>';
+
+                updateStatus('contract-calls-section', 'contract-calls-status', allWorking ? 'success' : 'error', results);
+                return allWorking;
+            } catch (error) {
+                updateStatus('contract-calls-section', 'contract-calls-status', 'error',
+                    `❌ Contract Call Error: ${error.message}`);
+                return false;
+            }
+        }
+
+        async function testMintingFunction() {
+            try {
+                if (!carbonContract) {
+                    throw new Error('Carbon contract not initialized');
+                }
+
+                // Check if mintWithAttestation function exists
+                const fragment = carbonContract.interface.getFunction('mintWithAttestation');
+
+                if (fragment) {
+                    updateStatus('minting-section', 'minting-status', 'success',
+                        `✅ mintWithAttestation function found<br>Signature: ${fragment.format()}`);
+                    return true;
+                } else {
+                    updateStatus('minting-section', 'minting-status', 'error',
+                        '❌ mintWithAttestation function not found in contract');
+                    return false;
+                }
+            } catch (error) {
+                updateStatus('minting-section', 'minting-status', 'error',
+                    `❌ Minting Function Error: ${error.message}`);
+                return false;
+            }
+        }
+
+        async function runDiagnostics() {
+            console.log('🔍 Running blockchain diagnostics...');
+
+            // Show environment config
+            document.getElementById('env-config').innerHTML = `
+Chain ID: ${config.CHAIN_ID}
+Carbon Contract: ${config.CARBON_ADDRESS}
+Marketplace: ${config.MARKETPLACE_ADDRESS}
+Verifier Registry: ${config.VERIFIER_REGISTRY_ADDRESS}
+Document Registry: ${config.DOCUMENT_REGISTRY_ADDRESS}
+            `;
+
+            const metamaskOk = await checkMetaMask();
+            if (!metamaskOk) return;
+
+            const networkOk = await checkNetwork();
+            if (!networkOk) return;
+
+            const contractsOk = await checkContracts();
+            if (!contractsOk) return;
+
+            const callsOk = await testContractCalls();
+            if (!callsOk) return;
+
+            await testMintingFunction();
+        }
+
+        async function connectWallet() {
+            try {
+                await window.ethereum.request({ method: 'eth_requestAccounts' });
+                await runDiagnostics();
+            } catch (error) {
+                console.error('Failed to connect wallet:', error);
+            }
+        }
+
+        async function switchNetwork() {
+            try {
+                await window.ethereum.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: '0xaa36a7' }], // Sepolia
+                });
+                await runDiagnostics();
+            } catch (error) {
+                console.error('Failed to switch network:', error);
+            }
+        }
+
+        async function testContractCall() {
+            try {
+                if (!provider) {
+                    provider = new ethers.BrowserProvider(window.ethereum);
+                }
+
+                signer = await provider.getSigner();
+                const carbonWithSigner = new ethers.Contract(config.CARBON_ADDRESS, CarbonCreditABI, signer);
+
+                console.log('Testing contract call with signer...');
+
+                // Try to call a view function first
+                const name = await carbonWithSigner.name();
+                console.log('✅ Contract name:', name);
+
+                // Test the minting function signature (don't actually call it)
+                const fragment = carbonWithSigner.interface.getFunction('mintWithAttestation');
+                console.log('✅ Minting function signature:', fragment.format());
+
+                alert(`✅ Contract test successful!\nContract name: ${name}\nMinting function available: ${fragment.format()}`);
+
+            } catch (error) {
+                console.error('❌ Contract test failed:', error);
+                alert(`❌ Contract test failed: ${error.message}`);
+            }
+        }
+
+        // Make functions global
+        window.runDiagnostics = runDiagnostics;
+        window.connectWallet = connectWallet;
+        window.switchNetwork = switchNetwork;
+        window.testContractCall = testContractCall;
+
+        // Auto-run diagnostics on load
+        document.addEventListener('DOMContentLoaded', runDiagnostics);
+    </script>
+</body>
+
+</html>

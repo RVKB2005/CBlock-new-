@@ -46,23 +46,23 @@ const WORKFLOW_STEPS = [
 ];
 
 export default function MintWorkflow() {
-   const [currentStep, setCurrentStep] = useState('upload');
-   const [completedSteps, setCompletedSteps] = useState(new Set());
-   const [uploadedData, setUploadedData] = useState(null);
-   const [signedData, setSignedData] = useState(null);
-   const [uploaderInfo, setUploaderInfo] = useState(null);
-   const [walletAddress, setWalletAddress] = useState('');
-   const [isVerifier, setIsVerifier] = useState(false);
-   const [isCheckingVerifier, setIsCheckingVerifier] = useState(false);
-   const [contractInfo, setContractInfo] = useState({
-     carbonAddress: '',
-     registryAddress: '',
-     isDeployed: false
-   });
-   const [networkInfo, setNetworkInfo] = useState({
-     chainId: null,
-     name: ''
-   });
+  const [currentStep, setCurrentStep] = useState('upload');
+  const [completedSteps, setCompletedSteps] = useState(new Set());
+  const [uploadedData, setUploadedData] = useState(null);
+  const [signedData, setSignedData] = useState(null);
+  const [uploaderInfo, setUploaderInfo] = useState(null);
+  const [walletAddress, setWalletAddress] = useState('');
+  const [isVerifier, setIsVerifier] = useState(false);
+  const [isCheckingVerifier, setIsCheckingVerifier] = useState(false);
+  const [contractInfo, setContractInfo] = useState({
+    carbonAddress: '',
+    registryAddress: '',
+    isDeployed: false
+  });
+  const [networkInfo, setNetworkInfo] = useState({
+    chainId: null,
+    name: ''
+  });
 
   useEffect(() => {
     initializeContracts();
@@ -72,13 +72,13 @@ export default function MintWorkflow() {
   const initializeContracts = async () => {
     const carbonAddress = import.meta.env.VITE_CONTRACT_CARBON_ADDRESS;
     const registryAddress = import.meta.env.VITE_CONTRACT_VERIFIER_REGISTRY_ADDRESS;
-    
+
     setContractInfo({
       carbonAddress: carbonAddress || '',
       registryAddress: registryAddress || '',
-      isDeployed: !!(carbonAddress && registryAddress && 
-                     carbonAddress !== 'YOUR_CARBON_CREDIT_CONTRACT_ADDRESS' &&
-                     registryAddress !== 'YOUR_VERIFIER_REGISTRY_ADDRESS')
+      isDeployed: !!(carbonAddress && registryAddress &&
+        carbonAddress !== 'YOUR_CARBON_CREDIT_CONTRACT_ADDRESS' &&
+        registryAddress !== 'YOUR_VERIFIER_REGISTRY_ADDRESS')
     });
 
     if (window.ethereum) {
@@ -111,7 +111,7 @@ export default function MintWorkflow() {
 
   const checkVerifierStatus = async (address) => {
     if (!address || !contractInfo.isDeployed) return;
-    
+
     setIsCheckingVerifier(true);
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
@@ -153,27 +153,27 @@ export default function MintWorkflow() {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const registry = new ethers.Contract(contractInfo.registryAddress, VerifierRegistryABI, signer);
-      
+
       toast.loading('Registering as verifier...', { id: 'registering' });
-      
+
       const tx = await registry.addVerifier(walletAddress);
       await tx.wait();
-      
+
       toast.dismiss('registering');
       toast.success('🎉 Successfully registered as a verifier!');
-      
+
       setIsVerifier(true);
     } catch (error) {
       console.error('Error registering as verifier:', error);
       toast.dismiss('registering');
-      
+
       let errorMessage = 'Failed to register as verifier';
       if (error.message.includes('Not governor executor')) {
         errorMessage = 'Only the governance executor can add verifiers. Use the demo mode for testing.';
       } else if (error.message.includes('user rejected')) {
         errorMessage = 'Registration was cancelled by user.';
       }
-      
+
       toast.error(errorMessage);
     } finally {
       setIsCheckingVerifier(false);
@@ -230,11 +230,10 @@ export default function MintWorkflow() {
       <motion.div
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
-        className={`relative flex flex-col items-center p-4 rounded-xl border-2 transition-all duration-300 ${
-          isCompleted ? 'border-green-200 bg-green-50' :
-          isActive ? `border-${step.color}-200 bg-${step.color}-50` :
-          'border-gray-200 bg-gray-50'
-        }`}
+        className={`relative flex flex-col items-center p-4 rounded-xl border-2 transition-all duration-300 ${isCompleted ? 'border-green-200 bg-green-50' :
+            isActive ? `border-${step.color}-200 bg-${step.color}-50` :
+              'border-gray-200 bg-gray-50'
+          }`}
       >
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colorClasses[step.color]}`}>
           {isCompleted ? (
@@ -243,18 +242,16 @@ export default function MintWorkflow() {
             <Icon className="w-6 h-6" />
           )}
         </div>
-        <h3 className={`mt-3 font-semibold text-sm ${
-          isCompleted ? 'text-green-900' :
-          isActive ? `text-${step.color}-900` :
-          'text-gray-500'
-        }`}>
+        <h3 className={`mt-3 font-semibold text-sm ${isCompleted ? 'text-green-900' :
+            isActive ? `text-${step.color}-900` :
+              'text-gray-500'
+          }`}>
           {step.title}
         </h3>
-        <p className={`text-xs text-center mt-1 ${
-          isCompleted ? 'text-green-700' :
-          isActive ? `text-${step.color}-700` :
-          'text-gray-500'
-        }`}>
+        <p className={`text-xs text-center mt-1 ${isCompleted ? 'text-green-700' :
+            isActive ? `text-${step.color}-700` :
+              'text-gray-500'
+          }`}>
           {step.description}
         </p>
       </motion.div>
@@ -264,7 +261,7 @@ export default function MintWorkflow() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
+
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -287,9 +284,8 @@ export default function MintWorkflow() {
         {/* System Status */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {/* Wallet Status */}
-          <div className={`p-4 rounded-xl border ${
-            walletAddress ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'
-          }`}>
+          <div className={`p-4 rounded-xl border ${walletAddress ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'
+            }`}>
             <div className="flex items-center space-x-2">
               <WalletIcon className={`w-5 h-5 ${walletAddress ? 'text-green-600' : 'text-orange-600'}`} />
               <span className={`font-medium text-sm ${walletAddress ? 'text-green-900' : 'text-orange-900'}`}>
@@ -302,9 +298,8 @@ export default function MintWorkflow() {
           </div>
 
           {/* Verifier Status */}
-          <div className={`p-4 rounded-xl border ${
-            isVerifier ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'
-          }`}>
+          <div className={`p-4 rounded-xl border ${isVerifier ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'
+            }`}>
             <div className="flex items-center space-x-2">
               <ShieldCheckIcon className={`w-5 h-5 ${isVerifier ? 'text-green-600' : 'text-orange-600'}`} />
               <span className={`font-medium text-sm ${isVerifier ? 'text-green-900' : 'text-orange-900'}`}>
@@ -314,9 +309,8 @@ export default function MintWorkflow() {
           </div>
 
           {/* Contracts Status */}
-          <div className={`p-4 rounded-xl border ${
-            contractInfo.isDeployed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-          }`}>
+          <div className={`p-4 rounded-xl border ${contractInfo.isDeployed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+            }`}>
             <div className="flex items-center space-x-2">
               <CubeTransparentIcon className={`w-5 h-5 ${contractInfo.isDeployed ? 'text-green-600' : 'text-red-600'}`} />
               <span className={`font-medium text-sm ${contractInfo.isDeployed ? 'text-green-900' : 'text-red-900'}`}>
@@ -326,9 +320,8 @@ export default function MintWorkflow() {
           </div>
 
           {/* Network Status */}
-          <div className={`p-4 rounded-xl border ${
-            networkInfo.chainId ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
-          }`}>
+          <div className={`p-4 rounded-xl border ${networkInfo.chainId ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
+            }`}>
             <div className="flex items-center space-x-2">
               <ChartBarIcon className="w-5 h-5 text-blue-600" />
               <span className="font-medium text-sm text-blue-900">
@@ -361,7 +354,7 @@ export default function MintWorkflow() {
                       </button>
                     </div>
                   )}
-                  
+
                   {walletAddress && !isVerifier && contractInfo.isDeployed && (
                     <div className="flex items-center justify-between">
                       <span className="text-yellow-800">Register as a verifier to sign attestations</span>
@@ -394,7 +387,7 @@ export default function MintWorkflow() {
                       </button>
                     </div>
                   )}
-                  
+
                   {!contractInfo.isDeployed && (
                     <div className="flex items-start justify-between">
                       <div>
@@ -445,11 +438,11 @@ export default function MintWorkflow() {
             {currentStep === 'upload' && (
               <Upload
                 key="upload"
-                onUploadComplete={(data) => handleUploadComplete(data, walletAddress)}
+                onUploaded={(data) => handleUploadComplete(data, data.uploaderAddress)}
                 user={{ accountType: isVerifier ? 'verifier' : 'individual' }}
               />
             )}
-            
+
             {currentStep === 'sign' && (
               <SignAttestation
                 key="sign"
@@ -458,7 +451,7 @@ export default function MintWorkflow() {
                 onSigned={handleSignComplete}
               />
             )}
-            
+
             {currentStep === 'mint' && (
               <Mint
                 key="mint"
@@ -493,7 +486,7 @@ export default function MintWorkflow() {
               <ArrowPathIcon className="w-5 h-5" />
               <span>Reset Workflow</span>
             </button>
-            
+
             <button
               onClick={() => {
                 const steps = WORKFLOW_STEPS.map(s => s.id);

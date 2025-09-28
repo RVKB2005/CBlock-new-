@@ -26,6 +26,7 @@ import toastNotifications from './ToastNotifications.jsx';
 import retryService from '../services/retryService.js';
 import { LoadingSpinner, DashboardLoading } from './LoadingStates.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
+import DocumentViewer from './DocumentViewer.jsx';
 
 // Constants for pagination and filtering
 const ITEMS_PER_PAGE = 10;
@@ -236,6 +237,116 @@ export default function VerifierDashboard() {
         setShowDocumentDetails(false);
         setSelectedDocument(null);
     }, []);
+
+    /**
+     * Handle manual minting for attested documents
+     */
+    const handleMinting = useCallback(async (document) => {
+        if (document.status !== DOCUMENT_STATUS.ATTESTED) {
+            toast.error('Document must be attested before minting');
+            return;
+        }
+
+        if (!document.attestation) {
+            toast.error('Document attestation data is missing. Please re-attest this document.');
+            console.error('❌ No attestation data found for document:', document.id);
+            console.error('Document status is ATTESTED but attestation data is missing. This indicates a data corruption issue.');
+            console.error('Document details:', document);
+
+            // Suggest fixing the document status
+            toast.error('This document appears to be corrupted. Please re-attest it or use the diagnostic tool to fix it.', {
+                duration: 10000
+            });
+            return;
+        }
+
+        // Check for required attestation fields
+        const requiredFields = ['signature', 'gsProjectId', 'gsSerial', 'amount', 'nonce'];
+        const missingFields = requiredFields.filter(field => !document.attestation[field]);
+
+        if (missingFields.length > 0) {
+            toast.error(`Missing attestation data: ${missingFields.join(', ')}`);
+            console.error('❌ Missing attestation fields:', missingFields, 'Available:', Object.keys(document.attestation));
+            return;
+        }
+
+        try {
+            console.log('🪙 Starting manual credit minting for document:', document.id);
+
+            // Prepare attestation data for minting
+            const attestationData = {
+                gsProjectId: document.attestation.gsProjectId,
+                gsSerial: document.attestation.gsSerial,
+                ipfsCid: document.cid,
+                amount: document.attestation.amount,
+                recipient: document.uploadedBy,
+                nonce: document.attestation.nonce,
+                signature: document.attestation.signature
+            };
+
+            toast.loading('Minting credits...', { id: 'minting' });
+
+            const mintingResult = await blockchainService.mintCarbonCreditsWithDocumentTracking(
+                attestationData,
+                document.id,
+                document
+            );
+
+            console.log('✅ Credits minted successfully:', mintingResult);
+
+            toast.success(`Credits minted and allocated to ${document.uploadedBy}!`, {
+                id: 'minting',
+                duration: 6000
+            });
+
+            // Update document with minting information
+            await documentService.updateDocumentMinting(document.id, {
+                transactionHash: mintingResult.receipt?.hash,
+                mintedAt: new Date().toISOString(),
+                mintedBy: await blockchainService.getCurrentAddress(),
+                amount: attestationData.amount,
+                recipient: attestationData.recipient,
+                tokenId: mintingResult.tokenId
+            });
+
+            // Refresh documents
+            await loadDocuments();
+
+        } catch (error) {
+            console.error('❌ Minting failed:', error);
+            toast.error(`Minting failed: ${error.message}`, {
+                id: 'minting',
+                duration: 8000
+            });
+        }
+    }, [loadDocuments]);
+
+    /**
+     * Handle resetting document to pending status
+     */
+    const handleResetToPending = useCallback(async (document) => {
+        try {
+            console.log('🔄 Resetting document to pending:', document.id);
+
+            // Update document status to pending and remove attestation data
+            await documentService.updateDocumentStatus(
+                document.id,
+                DOCUMENT_STATUS.PENDING,
+                {
+                    attestation: null, // Remove broken attestation data
+                }
+            );
+
+            toast.success('Document reset to pending status. You can now re-attest it.');
+
+            // Refresh the document list
+            await loadDocuments();
+
+        } catch (error) {
+            console.error('❌ Failed to reset document:', error);
+            toast.error(`Failed to reset document: ${error.message}`);
+        }
+    }, [loadDocuments]);
 
     /**
      * Refresh documents
@@ -509,10 +620,11 @@ export default function VerifierDashboard() {
                                     <tbody className="divide-y divide-carbon-200">
                                         {getPaginatedDocuments().map((document, index) => (
                                             <DocumentRow
-                                                key={document.id || document.cid}
+                                                key={`${document.cid || document.id}-${index}`}
                                                 document={document}
                                                 index={index}
                                                 onSelect={handleDocumentSelect}
+                                                onMint={handleMinting}
                                             />
                                         ))}
                                     </tbody>
@@ -581,7 +693,7 @@ function StatCard({ title, value, icon: Icon, color }) {
 /**
  * Document Row Component
  */
-function DocumentRow({ document, index, onSelect }) {
+function DocumentRow({ document, index, onSelect, onMint }) {
     const getStatusBadge = (status) => {
         const statusConfig = {
             [DOCUMENT_STATUS.PENDING]: {
@@ -681,13 +793,32 @@ function DocumentRow({ document, index, onSelect }) {
                 </div>
             </td>
             <td className="px-6 py-4">
-                <button
-                    onClick={() => onSelect(document)}
-                    className="inline-flex items-center space-x-1 px-3 py-1 text-sm font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
-                >
-                    <EyeIcon className="w-4 h-4" />
-                    <span>View</span>
-                </button>
+                <div className="flex space-x-2">
+                    <button
+                        onClick={() => onSelect(document)}
+                        className="inline-flex items-center space-x-1 px-3 py-1 text-sm font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
+                    >
+                        <EyeIcon className="w-4 h-4" />
+                        <span>View</span>
+                    </button>
+
+                    {/* Quick Mint Button for Attested Documents */}
+                    {document.status === DOCUMENT_STATUS.ATTESTED && onMint && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onMint(document);
+                            }}
+                            className="inline-flex items-center space-x-1 px-3 py-1 text-sm font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                            title="Mint Credits for this Document"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                            </svg>
+                            <span>Mint</span>
+                        </button>
+                    )}
+                </div>
             </td>
         </motion.tr>
     );
@@ -780,6 +911,123 @@ function DocumentDetailsModal({ document, onClose, onDocumentUpdate }) {
     const isRejected = document.status === DOCUMENT_STATUS.REJECTED;
 
     /**
+     * Handle manual minting for attested documents
+     */
+    const handleMinting = async (document) => {
+        if (document.status !== DOCUMENT_STATUS.ATTESTED) {
+            toast.error('Document must be attested before minting');
+            return;
+        }
+
+        if (!document.attestation) {
+            toast.error('Document attestation data is missing. Please re-attest this document.');
+            console.error('❌ No attestation data found for document:', document.id);
+            console.error('Document status is ATTESTED but attestation data is missing. This indicates a data corruption issue.');
+            console.error('Document details:', document);
+
+            // Suggest fixing the document status
+            toast.error('This document appears to be corrupted. Please re-attest it or use the diagnostic tool to fix it.', {
+                duration: 10000
+            });
+            return;
+        }
+
+        // Check for required attestation fields
+        const requiredFields = ['signature', 'gsProjectId', 'gsSerial', 'amount', 'nonce'];
+        const missingFields = requiredFields.filter(field => !document.attestation[field]);
+
+        if (missingFields.length > 0) {
+            toast.error(`Missing attestation data: ${missingFields.join(', ')}`);
+            console.error('❌ Missing attestation fields:', missingFields, 'Available:', Object.keys(document.attestation));
+            return;
+        }
+
+        try {
+            console.log('🪙 Starting manual credit minting for document:', document.id);
+
+            // Prepare attestation data for minting
+            const attestationData = {
+                gsProjectId: document.attestation.gsProjectId,
+                gsSerial: document.attestation.gsSerial,
+                ipfsCid: document.cid,
+                amount: document.attestation.amount,
+                recipient: document.uploadedBy,
+                nonce: document.attestation.nonce,
+                signature: document.attestation.signature
+            };
+
+            toast.loading('Minting credits...', { id: 'minting' });
+
+            const mintingResult = await blockchainService.mintCarbonCreditsWithDocumentTracking(
+                attestationData,
+                document.id,
+                document
+            );
+
+            console.log('✅ Credits minted successfully:', mintingResult);
+
+            toast.success(`Credits minted and allocated to ${document.uploadedBy}!`, {
+                id: 'minting',
+                duration: 6000
+            });
+
+            // Update document with minting information
+            await documentService.updateDocumentMinting(document.id, {
+                transactionHash: mintingResult.receipt?.hash,
+                mintedAt: new Date().toISOString(),
+                mintedBy: await blockchainService.getCurrentAddress(),
+                amount: attestationData.amount,
+                recipient: attestationData.recipient,
+                tokenId: mintingResult.tokenId
+            });
+
+            // Refresh documents
+            if (onDocumentUpdate) {
+                onDocumentUpdate();
+            }
+
+        } catch (error) {
+            console.error('❌ Minting failed:', error);
+            toast.error(`Minting failed: ${error.message}`, {
+                id: 'minting',
+                duration: 8000
+            });
+        }
+    };
+
+    /**
+     * Handle resetting document to pending status
+     */
+    const handleResetToPending = async (document) => {
+        try {
+            console.log('🔄 Resetting document to pending:', document.id);
+
+            // Update document status to pending and remove attestation data
+            const updatedDocument = await documentService.updateDocumentStatus(
+                document.id,
+                DOCUMENT_STATUS.PENDING,
+                {
+                    attestation: null, // Remove broken attestation data
+                }
+            );
+
+            toast.success('Document reset to pending status. You can now re-attest it.');
+
+            // Refresh the document list
+            if (onDocumentUpdate) {
+                onDocumentUpdate();
+            }
+
+            // Close the modal
+            onClose();
+
+        } catch (error) {
+            console.error('❌ Failed to reset document:', error);
+            toast.error(`Failed to reset document: ${error.message}`);
+        }
+    };
+
+    /**
      * Handle attestation form submission
      */
     const handleAttestation = async (e) => {
@@ -810,11 +1058,32 @@ function DocumentDetailsModal({ document, onClose, onDocumentUpdate }) {
                 throw new Error('Carbon credit contract address not found');
             }
 
+            // Validate that document has uploader information
+            if (!document.uploadedBy) {
+                throw new Error('Document is missing uploader address. This document may be corrupted or from an older version.');
+            }
+
             // Get nonce for the recipient
             const nonce = await blockchainService.getNonce(document.uploadedBy);
 
             // Create attestation data
             const fullAttestationData = createAttestationData(attestationData, document, nonce);
+
+            // Debug: Log attestation data before validation
+            console.log('🔍 Attestation data before validation:', {
+                document: {
+                    id: document.id,
+                    cid: document.cid,
+                    ipfsCid: document.ipfsCid,
+                    hash: document.hash,
+                    cidType: typeof document.cid,
+                    cidLength: document.cid?.length,
+                    uploadedBy: document.uploadedBy,
+                    allDocumentKeys: Object.keys(document)
+                },
+                attestationData,
+                fullAttestationData
+            });
 
             // Validate attestation data
             validateAttestationData(fullAttestationData);
@@ -837,7 +1106,42 @@ function DocumentDetailsModal({ document, onClose, onDocumentUpdate }) {
 
             console.log('✅ Attestation successful:', result);
 
-            toast.success('Document attested successfully!');
+            toast.success('Document attested successfully! Now minting credits...');
+
+            // After successful attestation, automatically mint credits
+            try {
+                console.log('🪙 Starting automatic credit minting...');
+
+                const mintingResult = await blockchainService.mintCarbonCreditsWithDocumentTracking(
+                    signedAttestationData,
+                    document.id,
+                    document
+                );
+
+                console.log('✅ Credits minted successfully:', mintingResult);
+
+                toast.success(`Credits minted and allocated to ${document.uploadedBy}!`, {
+                    duration: 6000
+                });
+
+                // Update document with minting information
+                await documentService.updateDocumentMinting(document.id, {
+                    transactionHash: mintingResult.receipt?.hash,
+                    mintedAt: new Date().toISOString(),
+                    mintedBy: await blockchainService.getCurrentAddress(),
+                    amount: signedAttestationData.amount,
+                    recipient: signedAttestationData.recipient,
+                    tokenId: mintingResult.tokenId
+                });
+
+            } catch (mintingError) {
+                console.error('❌ Minting failed after attestation:', mintingError);
+
+                // Show error but don't fail the attestation
+                toast.error(`Attestation successful, but minting failed: ${mintingError.message}`, {
+                    duration: 8000
+                });
+            }
 
             // Close form and refresh documents
             setShowAttestationForm(false);
@@ -971,6 +1275,12 @@ function DocumentDetailsModal({ document, onClose, onDocumentUpdate }) {
                                     <p><span className="font-medium">IPFS CID:</span> <code className="text-xs bg-carbon-200 px-1 rounded">{document.cid}</code></p>
                                     <p><span className="font-medium">Uploaded:</span> {new Date(document.createdAt || document.uploadedAt).toLocaleString()}</p>
                                 </div>
+                            </div>
+
+                            {/* Document Viewer */}
+                            <div>
+                                <h3 className="font-semibold text-carbon-900 mb-2">Document Viewer</h3>
+                                <DocumentViewer document={document} />
                             </div>
 
                             {/* Attestation Information */}
@@ -1113,16 +1423,92 @@ function DocumentDetailsModal({ document, onClose, onDocumentUpdate }) {
                                 </div>
                             )}
 
-                            {isAttested && (
-                                <div className="bg-green-50 rounded-lg p-6 text-center">
-                                    <CheckCircleIcon className="w-12 h-12 text-green-500 mx-auto mb-4" />
-                                    <h3 className="text-lg font-semibold text-carbon-900 mb-2">Document Attested</h3>
+                            {isAttested && document.attestation && (() => {
+                                // Check if attestation data is complete
+                                const requiredFields = ['signature', 'gsProjectId', 'gsSerial', 'amount', 'nonce'];
+                                const missingFields = requiredFields.filter(field => !document.attestation[field]);
+
+                                if (missingFields.length > 0) {
+                                    // Broken attestation data
+                                    return (
+                                        <div className="bg-red-50 rounded-lg p-6 text-center">
+                                            <ExclamationTriangleIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                                            <h3 className="text-lg font-semibold text-carbon-900 mb-2">Attestation Data Incomplete</h3>
+                                            <p className="text-carbon-600 mb-4">
+                                                This document is marked as attested but is missing required data for minting.
+                                            </p>
+                                            <div className="text-sm text-red-600 mb-4">
+                                                <p>Missing fields: {missingFields.join(', ')}</p>
+                                                <p>This likely happened before our recent fix.</p>
+                                            </div>
+
+                                            <button
+                                                onClick={() => {
+                                                    // Reset document to pending status
+                                                    if (confirm('Reset this document to pending status so it can be re-attested?')) {
+                                                        handleResetToPending(document);
+                                                    }
+                                                }}
+                                                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center space-x-2 mx-auto"
+                                            >
+                                                <ArrowPathIcon className="w-5 h-5" />
+                                                <span>Reset to Pending</span>
+                                            </button>
+                                        </div>
+                                    );
+                                } else {
+                                    // Complete attestation data
+                                    return (
+                                        <div className="bg-green-50 rounded-lg p-6 text-center">
+                                            <CheckCircleIcon className="w-12 h-12 text-green-500 mx-auto mb-4" />
+                                            <h3 className="text-lg font-semibold text-carbon-900 mb-2">Document Attested</h3>
+                                            <p className="text-carbon-600 mb-4">
+                                                This document has been successfully attested and is ready for minting.
+                                            </p>
+                                            <div className="text-sm text-carbon-500 mb-4">
+                                                <p>Attested by: {document.attestation?.verifierAddress}</p>
+                                                <p>Credits: {document.attestation?.amount}</p>
+                                                <p>Recipient: {document.uploadedBy}</p>
+                                                <p>Attested on: {new Date(document.attestation?.attestedAt).toLocaleDateString()}</p>
+                                            </div>
+
+                                            {/* Mint Credits Button */}
+                                            <button
+                                                onClick={() => handleMinting(document)}
+                                                className="bg-emerald-600 text-white px-6 py-2 rounded-lg hover:bg-emerald-700 transition-colors font-medium flex items-center space-x-2 mx-auto"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                                                </svg>
+                                                <span>Mint Credits</span>
+                                            </button>
+                                        </div>
+                                    );
+                                }
+                            })()}
+
+                            {isAttested && !document.attestation && (
+                                <div className="bg-red-50 rounded-lg p-6 text-center">
+                                    <ExclamationTriangleIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                                    <h3 className="text-lg font-semibold text-carbon-900 mb-2">Attestation Data Missing</h3>
                                     <p className="text-carbon-600 mb-4">
-                                        This document has been successfully attested and is ready for minting.
+                                        This document is marked as attested but has no attestation data.
                                     </p>
-                                    <div className="text-sm text-carbon-500">
-                                        Attested on {new Date(document.attestation?.attestedAt).toLocaleDateString()}
-                                    </div>
+                                    <p className="text-sm text-red-600 mb-4">
+                                        This likely happened before our recent fix. Please re-attest this document.
+                                    </p>
+
+                                    <button
+                                        onClick={() => {
+                                            if (confirm('Reset this document to pending status so it can be re-attested?')) {
+                                                handleResetToPending(document);
+                                            }
+                                        }}
+                                        className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center space-x-2 mx-auto"
+                                    >
+                                        <ArrowPathIcon className="w-5 h-5" />
+                                        <span>Reset to Pending</span>
+                                    </button>
                                 </div>
                             )}
 

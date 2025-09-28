@@ -355,18 +355,21 @@ export default function App() {
           </RoleGuard>
         );
 
-      case 'mintCredits':
+      case 'upload':
         return (
           <RoleGuard
             allowedRoles={[ROLES.INDIVIDUAL, ROLES.BUSINESS]}
             requiredPermissions={[PERMISSIONS.UPLOAD_DOCUMENT]}
             user={user}
           >
-            <DemoCreditsProvider>
-              <MintCreditsPage onNavigate={setCurrentPage} />
-            </DemoCreditsProvider>
+            <Upload user={user} onNavigate={setCurrentPage} />
           </RoleGuard>
         );
+
+      case 'mintCredits':
+        // Redirect to upload for backward compatibility
+        setCurrentPage('upload');
+        return null;
 
       case 'portfolio':
         return (
@@ -704,7 +707,11 @@ function MintPage({ mintStep, uploaded, signed, onReset, onUploaded, onSigned, u
             >
               {/* Step Header */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-400 to-purple-600" />
-              <SignAttestation uploadedData={uploaded} onSigned={onSigned} />
+              <SignAttestation
+                uploadedData={uploaded}
+                onSigned={onSigned}
+                uploaderAddress={uploaded?.uploaderAddress}
+              />
             </motion.div>
           )}
 

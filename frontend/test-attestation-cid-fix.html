@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attestation CID Fix Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔧 Attestation CID Fix Test</h1>
+        <p>This test verifies that the "IPFS CID is required" error in attestation has been fixed.</p>
+
+        <div class="test-section info">
+            <h3>Test Scenarios</h3>
+            <p>1. Test document with valid CID</p>
+            <p>2. Test document with missing CID</p>
+            <p>3. Test document with CID in different properties</p>
+            <p>4. Test createAttestationData function</p>
+        </div>
+
+        <div class="test-section">
+            <h3>Test Controls</h3>
+            <button onclick="testValidCID()">Test Valid CID</button>
+            <button onclick="testMissingCID()">Test Missing CID</button>
+            <button onclick="testAlternateCIDProperties()">Test Alternate CID Properties</button>
+            <button onclick="testCreateAttestationData()">Test createAttestationData</button>
+        </div>
+
+        <div class="test-section">
+            <h3>Test Results</h3>
+            <div id="testResults" class="log">Ready to run tests...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        function log(message) {
+            const results = document.getElementById('testResults');
+            const timestamp = new Date().toLocaleTimeString();
+            results.textContent += `[${timestamp}] ${message}\n`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        async function testValidCID() {
+            log('🧪 Testing document with valid CID...');
+
+            try {
+                // Import the EIP-712 utilities
+                const { createAttestationData, validateAttestationData } = await import('./src/utils/eip712.js');
+
+                // Test document with valid CID
+                const document = {
+                    id: 1,
+                    cid: 'QmTestCID123456789abcdef',
+                    uploadedBy: '0x1234567890123456789012345678901234567890',
+                    estimatedCredits: 100
+                };
+
+                const formData = {
+                    gsProjectId: 'TEST-001',
+                    gsSerial: 'SER-001',
+                    amount: 100
+                };
+
+                const nonce = 1;
+
+                // Create attestation data
+                const attestationData = createAttestationData(formData, document, nonce);
+
+                log('✅ Created attestation data successfully:');
+                log(JSON.stringify(attestationData, null, 2));
+
+                // Validate attestation data
+                validateAttestationData(attestationData);
+
+                log('✅ Validation passed for document with valid CID!');
+
+            } catch (error) {
+                log(`❌ Test failed: ${error.message}`);
+            }
+        }
+
+        async function testMissingCID() {
+            log('🧪 Testing document with missing CID...');
+
+            try {
+                // Import the EIP-712 utilities
+                const { createAttestationData } = await import('./src/utils/eip712.js');
+
+                // Test document without CID
+                const document = {
+                    id: 1,
+                    // No cid property
+                    uploadedBy: '0x1234567890123456789012345678901234567890',
+                    estimatedCredits: 100
+                };
+
+                const formData = {
+                    gsProjectId: 'TEST-001',
+                    gsSerial: 'SER-001',
+                    amount: 100
+                };
+
+                const nonce = 1;
+
+                // This should throw an error
+                const attestationData = createAttestationData(formData, document, nonce);
+
+                log('❌ Expected error but got success - this is a problem!');
+
+            } catch (error) {
+                log(`✅ Correctly caught error for missing CID: ${error.message}`);
+            }
+        }
+
+        async function testAlternateCIDProperties() {
+            log('🧪 Testing document with CID in alternate properties...');
+
+            try {
+                // Import the EIP-712 utilities
+                const { createAttestationData, validateAttestationData } = await import('./src/utils/eip712.js');
+
+                // Test scenarios with CID in different properties
+                const testCases = [
+                    {
+                        name: 'CID in ipfsCid property',
+                        document: {
+                            id: 1,
+                            ipfsCid: 'QmTestCID123456789abcdef',
+                            uploadedBy: '0x1234567890123456789012345678901234567890'
+                        }
+                    },
+                    {
+                        name: 'CID in hash property',
+                        document: {
+                            id: 1,
+                            hash: 'QmTestCID123456789abcdef',
+                            uploadedBy: '0x1234567890123456789012345678901234567890'
+                        }
+                    },
+                    {
+                        name: 'CID as ID (fallback)',
+                        document: {
+                            id: 'QmTestCID123456789abcdef',
+                            uploadedBy: '0x1234567890123456789012345678901234567890'
+                        }
+                    }
+                ];
+
+                const formData = {
+                    gsProjectId: 'TEST-001',
+                    gsSerial: 'SER-001',
+                    amount: 100
+                };
+
+                for (const testCase of testCases) {
+                    try {
+                        log(`📝 Testing: ${testCase.name}`);
+
+                        const attestationData = createAttestationData(formData, testCase.document, 1);
+                        validateAttestationData(attestationData);
+
+                        log(`✅ ${testCase.name} - SUCCESS`);
+                        log(`   IPFS CID found: ${attestationData.ipfsCid}`);
+
+                    } catch (error) {
+                        log(`❌ ${testCase.name} - FAILED: ${error.message}`);
+                    }
+                }
+
+            } catch (error) {
+                log(`❌ Test setup failed: ${error.message}`);
+            }
+        }
+
+        async function testCreateAttestationData() {
+            log('🧪 Testing createAttestationData function directly...');
+
+            try {
+                // Import the EIP-712 utilities
+                const { createAttestationData } = await import('./src/utils/eip712.js');
+
+                // Test with complete document
+                const document = {
+                    id: 1,
+                    cid: 'QmTestCID123456789abcdef',
+                    uploadedBy: '0x1234567890123456789012345678901234567890',
+                    estimatedCredits: 150,
+                    filename: 'test-document.pdf',
+                    projectName: 'Test Project'
+                };
+
+                const formData = {
+                    gsProjectId: 'PROJ-001',
+                    gsSerial: 'SERIAL-001',
+                    amount: 200 // Should override estimatedCredits
+                };
+
+                const nonce = 42;
+
+                const result = createAttestationData(formData, document, nonce);
+
+                log('✅ createAttestationData result:');
+                log(JSON.stringify(result, null, 2));
+
+                // Verify all expected properties
+                const expectedProperties = ['gsProjectId', 'gsSerial', 'ipfsCid', 'amount', 'recipient', 'nonce'];
+                const missingProperties = expectedProperties.filter(prop => !(prop in result));
+
+                if (missingProperties.length === 0) {
+                    log('✅ All expected properties present');
+                } else {
+                    log(`❌ Missing properties: ${missingProperties.join(', ')}`);
+                }
+
+                // Verify values
+                if (result.ipfsCid === document.cid) {
+                    log('✅ IPFS CID correctly mapped');
+                } else {
+                    log(`❌ IPFS CID mismatch: expected ${document.cid}, got ${result.ipfsCid}`);
+                }
+
+                if (result.amount === 200) {
+                    log('✅ Amount correctly used from form data');
+                } else {
+                    log(`❌ Amount incorrect: expected 200, got ${result.amount}`);
+                }
+
+            } catch (error) {
+                log(`❌ createAttestationData test failed: ${error.message}`);
+                log(`📋 Error stack: ${error.stack}`);
+            }
+        }
+
+        // Make functions available globally
+        window.testValidCID = testValidCID;
+        window.testMissingCID = testMissingCID;
+        window.testAlternateCIDProperties = testAlternateCIDProperties;
+        window.testCreateAttestationData = testCreateAttestationData;
+
+        // Auto-run basic test on page load
+        window.addEventListener('load', () => {
+            log('🚀 Attestation CID Fix Test loaded');
+            log('Click buttons to run specific tests');
+        });
+    </script>
+</body>
+
+</html>

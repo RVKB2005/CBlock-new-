@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Attestation Data</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8fafc;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .document-card {
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+
+        .document-card.attested {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .document-card.broken {
+            border-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .document-card.pending {
+            border-color: #f59e0b;
+            background: #fffbeb;
+        }
+
+        .code-block {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        .button {
+            background: #3b82f6;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 12px;
+        }
+
+        .button:hover {
+            background: #2563eb;
+        }
+
+        .button.danger {
+            background: #ef4444;
+        }
+
+        .button.danger:hover {
+            background: #dc2626;
+        }
+
+        .button.success {
+            background: #10b981;
+        }
+
+        .button.success:hover {
+            background: #059669;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .status-attested {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-broken {
+            background: #fecaca;
+            color: #991b1b;
+        }
+
+        .field-list {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .field-item {
+            padding: 8px;
+            background: #f9fafb;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .field-item.missing {
+            background: #fef2f2;
+            color: #991b1b;
+        }
+
+        .field-item.present {
+            background: #f0fdf4;
+            color: #166534;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Debug Attestation Data</h1>
+            <p>Analyze and fix documents with missing attestation data</p>
+        </div>
+
+        <div id="analysis-results">
+            <p>Loading documents...</p>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <button class="button" onclick="analyzeDocuments()">🔄 Refresh Analysis</button>
+            <button class="button success" onclick="fixBrokenDocuments()">🔧 Fix Broken Documents</button>
+            <button class="button danger" onclick="clearAllDocuments()">🗑️ Clear All Documents</button>
+        </div>
+
+        <div id="fix-log" style="margin-top: 30px;"></div>
+    </div>
+
+    <script>
+        function analyzeDocuments() {
+            const resultsDiv = document.getElementById('analysis-results');
+
+            try {
+                const stored = localStorage.getItem('cblock_documents');
+                if (!stored) {
+                    resultsDiv.innerHTML = '<p>No documents found in storage.</p>';
+                    return;
+                }
+
+                const documentsArray = JSON.parse(stored);
+                const documents = new Map(documentsArray);
+
+                console.log('📊 Total documents:', documents.size);
+
+                let html = `<h3>📊 Document Analysis (${documents.size} total)</h3>`;
+
+                const categories = {
+                    attested: [],
+                    broken: [],
+                    pending: [],
+                    other: []
+                };
+
+                // Categorize documents
+                documents.forEach((doc, id) => {
+                    if (doc.status === 'attested') {
+                        if (doc.attestation && hasAllRequiredFields(doc.attestation)) {
+                            categories.attested.push({ id, doc });
+                        } else {
+                            categories.broken.push({ id, doc });
+                        }
+                    } else if (doc.status === 'pending') {
+                        categories.pending.push({ id, doc });
+                    } else {
+                        categories.other.push({ id, doc });
+                    }
+                });
+
+                // Display results
+                html += `
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0;">
+                        <div style="text-align: center; padding: 15px; background: #f0fdf4; border-radius: 8px;">
+                            <h4 style="margin: 0; color: #166534;">✅ Working Attested</h4>
+                            <p style="font-size: 24px; font-weight: bold; margin: 5px 0; color: #166534;">${categories.attested.length}</p>
+                        </div>
+                        <div style="text-align: center; padding: 15px; background: #fef2f2; border-radius: 8px;">
+                            <h4 style="margin: 0; color: #991b1b;">❌ Broken Attested</h4>
+                            <p style="font-size: 24px; font-weight: bold; margin: 5px 0; color: #991b1b;">${categories.broken.length}</p>
+                        </div>
+                        <div style="text-align: center; padding: 15px; background: #fffbeb; border-radius: 8px;">
+                            <h4 style="margin: 0; color: #92400e;">⏳ Pending</h4>
+                            <p style="font-size: 24px; font-weight: bold; margin: 5px 0; color: #92400e;">${categories.pending.length}</p>
+                        </div>
+                        <div style="text-align: center; padding: 15px; background: #f3f4f6; border-radius: 8px;">
+                            <h4 style="margin: 0; color: #374151;">📄 Other</h4>
+                            <p style="font-size: 24px; font-weight: bold; margin: 5px 0; color: #374151;">${categories.other.length}</p>
+                        </div>
+                    </div>
+                `;
+
+                // Show broken documents in detail
+                if (categories.broken.length > 0) {
+                    html += '<h4 style="color: #991b1b;">❌ Broken Attested Documents (Missing Data)</h4>';
+                    categories.broken.forEach(({ id, doc }) => {
+                        html += createDocumentCard(id, doc, 'broken');
+                    });
+                }
+
+                // Show working attested documents
+                if (categories.attested.length > 0) {
+                    html += '<h4 style="color: #166534;">✅ Working Attested Documents</h4>';
+                    categories.attested.forEach(({ id, doc }) => {
+                        html += createDocumentCard(id, doc, 'attested');
+                    });
+                }
+
+                // Show pending documents
+                if (categories.pending.length > 0) {
+                    html += '<h4 style="color: #92400e;">⏳ Pending Documents</h4>';
+                    categories.pending.forEach(({ id, doc }) => {
+                        html += createDocumentCard(id, doc, 'pending');
+                    });
+                }
+
+                resultsDiv.innerHTML = html;
+
+            } catch (error) {
+                console.error('Error analyzing documents:', error);
+                resultsDiv.innerHTML = `<p style="color: red;">Error analyzing documents: ${error.message}</p>`;
+            }
+        }
+
+        function hasAllRequiredFields(attestation) {
+            const requiredFields = ['signature', 'gsProjectId', 'gsSerial', 'amount', 'nonce'];
+            return requiredFields.every(field => attestation && attestation[field]);
+        }
+
+        function createDocumentCard(id, doc, type) {
+            const requiredFields = ['signature', 'gsProjectId', 'gsSerial', 'amount', 'nonce'];
+            const availableFields = doc.attestation ? Object.keys(doc.attestation) : [];
+            const missingFields = requiredFields.filter(field => !doc.attestation?.[field]);
+
+            let fieldsHtml = '<div class="field-list">';
+            requiredFields.forEach(field => {
+                const isPresent = doc.attestation && doc.attestation[field];
+                fieldsHtml += `<div class="field-item ${isPresent ? 'present' : 'missing'}">
+                    ${isPresent ? '✅' : '❌'} ${field}
+                </div>`;
+            });
+            fieldsHtml += '</div>';
+
+            return `
+                <div class="document-card ${type}">
+                    <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="margin: 0;">Document ${id}</h4>
+                        <span class="status-badge status-${type}">${doc.status}</span>
+                    </div>
+                    
+                    <p><strong>File:</strong> ${doc.filename || 'Unknown'}</p>
+                    <p><strong>Project:</strong> ${doc.projectName || 'Unknown'}</p>
+                    <p><strong>Uploader:</strong> ${doc.uploadedBy || 'Unknown'}</p>
+                    <p><strong>Created:</strong> ${new Date(doc.createdAt || doc.uploadedAt).toLocaleString()}</p>
+                    
+                    ${type === 'broken' ? `
+                        <p style="color: #991b1b;"><strong>Missing Fields:</strong> ${missingFields.join(', ')}</p>
+                        ${fieldsHtml}
+                        <div style="margin-top: 15px;">
+                            <button class="button" onclick="resetDocumentToPending('${id}')">🔄 Reset to Pending</button>
+                            <button class="button danger" onclick="deleteDocument('${id}')">🗑️ Delete</button>
+                        </div>
+                    ` : ''}
+                    
+                    ${type === 'attested' ? `
+                        <p style="color: #166534;"><strong>All Required Fields Present</strong></p>
+                        ${fieldsHtml}
+                    ` : ''}
+                    
+                    ${type === 'pending' ? `
+                        <p style="color: #92400e;"><strong>Ready for Attestation</strong></p>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function resetDocumentToPending(documentId) {
+            try {
+                const stored = localStorage.getItem('cblock_documents');
+                const documentsArray = JSON.parse(stored);
+                const documents = new Map(documentsArray);
+
+                const doc = documents.get(documentId);
+                if (doc) {
+                    doc.status = 'pending';
+                    delete doc.attestation; // Remove broken attestation data
+
+                    documents.set(documentId, doc);
+                    localStorage.setItem('cblock_documents', JSON.stringify(Array.from(documents.entries())));
+
+                    logFix(`✅ Reset document ${documentId} to pending status`);
+                    analyzeDocuments(); // Refresh display
+                } else {
+                    logFix(`❌ Document ${documentId} not found`);
+                }
+            } catch (error) {
+                logFix(`❌ Error resetting document ${documentId}: ${error.message}`);
+            }
+        }
+
+        function deleteDocument(documentId) {
+            if (!confirm(`Are you sure you want to delete document ${documentId}?`)) {
+                return;
+            }
+
+            try {
+                const stored = localStorage.getItem('cblock_documents');
+                const documentsArray = JSON.parse(stored);
+                const documents = new Map(documentsArray);
+
+                if (documents.delete(documentId)) {
+                    localStorage.setItem('cblock_documents', JSON.stringify(Array.from(documents.entries())));
+                    logFix(`✅ Deleted document ${documentId}`);
+                    analyzeDocuments(); // Refresh display
+                } else {
+                    logFix(`❌ Document ${documentId} not found`);
+                }
+            } catch (error) {
+                logFix(`❌ Error deleting document ${documentId}: ${error.message}`);
+            }
+        }
+
+        function fixBrokenDocuments() {
+            try {
+                const stored = localStorage.getItem('cblock_documents');
+                const documentsArray = JSON.parse(stored);
+                const documents = new Map(documentsArray);
+
+                let fixedCount = 0;
+
+                documents.forEach((doc, id) => {
+                    if (doc.status === 'attested' && (!doc.attestation || !hasAllRequiredFields(doc.attestation))) {
+                        doc.status = 'pending';
+                        delete doc.attestation;
+                        documents.set(id, doc);
+                        fixedCount++;
+                        logFix(`🔧 Fixed document ${id} - reset to pending`);
+                    }
+                });
+
+                if (fixedCount > 0) {
+                    localStorage.setItem('cblock_documents', JSON.stringify(Array.from(documents.entries())));
+                    logFix(`✅ Fixed ${fixedCount} broken documents`);
+                } else {
+                    logFix(`ℹ️ No broken documents found to fix`);
+                }
+
+                analyzeDocuments(); // Refresh display
+
+            } catch (error) {
+                logFix(`❌ Error fixing documents: ${error.message}`);
+            }
+        }
+
+        function clearAllDocuments() {
+            if (!confirm('Are you sure you want to delete ALL documents? This cannot be undone!')) {
+                return;
+            }
+
+            localStorage.removeItem('cblock_documents');
+            logFix('🗑️ All documents cleared');
+            analyzeDocuments(); // Refresh display
+        }
+
+        function logFix(message) {
+            const logDiv = document.getElementById('fix-log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<p>[${timestamp}] ${message}</p>`;
+            console.log(message);
+        }
+
+        // Auto-analyze on page load
+        document.addEventListener('DOMContentLoaded', analyzeDocuments);
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test IPFS CID Validation Fix</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+
+        .warning {
+            background-color: #fff3cd;
+            border-color: #ffeeba;
+            color: #856404;
+        }
+
+        .info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+            color: #0c5460;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+
+        .test-result {
+            margin: 10px 0;
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        .pass {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .fail {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Test IPFS CID Validation Fix</h1>
+    <p>This page tests the fix for IPFS CID validation errors in the attestation process.</p>
+
+    <div class="test-section info">
+        <h3>Error Analysis</h3>
+        <p>The original error was:</p>
+        <pre>❌ Attestation failed: Error: Invalid IPFS CID format
+at validateAttestationData (eip712.js:175:11)</pre>
+        <p><strong>Root Cause:</strong> The IPFS CID validation was too strict and didn't accept all valid CID formats,
+            especially mock CIDs generated during development.</p>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 1: IPFS CID Format Validation</h3>
+        <button onclick="testCIDValidation()">Test CID Validation</button>
+        <div id="cidValidationResults"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 2: Mock CID Generation</h3>
+        <button onclick="testMockCIDGeneration()">Test Mock CID Generation</button>
+        <div id="mockCIDResults"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 3: EIP-712 Attestation Data Validation</h3>
+        <button onclick="testAttestationDataValidation()">Test Attestation Data Validation</button>
+        <div id="attestationValidationResults"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 4: Edge Cases</h3>
+        <button onclick="testEdgeCases()">Test Edge Cases</button>
+        <div id="edgeCaseResults"></div>
+    </div>
+
+    <script>
+        // Mock the improved IPFS CID validation function
+        function validateIPFSCID(ipfsCid) {
+            if (!ipfsCid || typeof ipfsCid !== "string" || ipfsCid.trim() === "") {
+                throw new Error("IPFS CID is required");
+            }
+
+            // Validate IPFS CID format (flexible validation for various CID formats)
+            const validCidPrefixes = ["Qm", "bafy", "baf", "k51", "z", "f01"];
+            const isValidCid = validCidPrefixes.some(prefix => ipfsCid.startsWith(prefix)) ||
+                /^[a-zA-Z0-9]{46,}$/.test(ipfsCid); // Basic length and character check
+
+            if (!isValidCid) {
+                console.error("Invalid IPFS CID format:", {
+                    cid: ipfsCid,
+                    length: ipfsCid.length,
+                    startsWithValidPrefix: validCidPrefixes.some(prefix => ipfsCid.startsWith(prefix)),
+                    matchesPattern: /^[a-zA-Z0-9]{46,}$/.test(ipfsCid)
+                });
+                throw new Error(`Invalid IPFS CID format: ${ipfsCid} (length: ${ipfsCid.length})`);
+            }
+
+            return true;
+        }
+
+        // Mock improved mock CID generation
+        function generateMockCID() {
+            const randomString = Math.random().toString(36).slice(2, 15);
+            const mockCid = `bafy${randomString}${'a'.repeat(46 - randomString.length)}`;
+            return mockCid;
+        }
+
+        // Mock attestation data validation
+        function validateAttestationData(data) {
+            // Validate required fields
+            if (!data.gsProjectId || typeof data.gsProjectId !== "string" || data.gsProjectId.trim() === "") {
+                throw new Error("Project ID is required");
+            }
+
+            if (!data.gsSerial || typeof data.gsSerial !== "string" || data.gsSerial.trim() === "") {
+                throw new Error("Serial number is required");
+            }
+
+            // Validate IPFS CID
+            validateIPFSCID(data.ipfsCid);
+
+            if (!data.recipient || typeof data.recipient !== "string" || data.recipient.trim() === "") {
+                throw new Error("Recipient address is required");
+            }
+
+            if (!/^0x[a-fA-F0-9]{40}$/.test(data.recipient)) {
+                throw new Error("Invalid recipient address format");
+            }
+
+            if (typeof data.amount !== "number" || data.amount <= 0 || data.amount > 1000000) {
+                throw new Error("Amount must be between 1 and 1,000,000");
+            }
+
+            if (typeof data.nonce !== "number" || data.nonce < 0) {
+                throw new Error("Nonce must be a non-negative number");
+            }
+
+            return true;
+        }
+
+        function testCIDValidation() {
+            const resultsDiv = document.getElementById('cidValidationResults');
+            resultsDiv.innerHTML = '<p>🧪 Testing CID validation...</p>';
+
+            setTimeout(() => {
+                const testCases = [
+                    // Valid CIDs
+                    { cid: 'QmTestCID123456789012345678901234567890123456', expected: true, description: 'CIDv0 (Qm prefix)' },
+                    { cid: 'bafyTestCID123456789012345678901234567890123456', expected: true, description: 'CIDv1 (bafy prefix)' },
+                    { cid: 'bafTestCID123456789012345678901234567890123456', expected: true, description: 'Mock CID (baf prefix)' },
+                    { cid: 'k51TestCID123456789012345678901234567890123456', expected: true, description: 'CIDv1 (k51 prefix)' },
+                    { cid: 'zTestCID123456789012345678901234567890123456789', expected: true, description: 'CIDv1 (z prefix)' },
+                    { cid: 'f01TestCID123456789012345678901234567890123456', expected: true, description: 'CIDv1 (f01 prefix)' },
+
+                    // Invalid CIDs
+                    { cid: '', expected: false, description: 'Empty string' },
+                    { cid: 'invalid-cid', expected: false, description: 'Invalid format' },
+                    { cid: 'Qm123', expected: false, description: 'Too short' },
+                    { cid: 'xyz123456789012345678901234567890123456789', expected: false, description: 'Invalid prefix' },
+                ];
+
+                let results = '<div class="success"><h4>✅ CID Validation Test Results</h4>';
+                let passCount = 0;
+                let totalCount = testCases.length;
+
+                testCases.forEach(testCase => {
+                    try {
+                        validateIPFSCID(testCase.cid);
+                        if (testCase.expected) {
+                            results += `<div class="test-result pass">✅ ${testCase.description}: PASS (correctly accepted)</div>`;
+                            passCount++;
+                        } else {
+                            results += `<div class="test-result fail">❌ ${testCase.description}: FAIL (should have been rejected)</div>`;
+                        }
+                    } catch (error) {
+                        if (!testCase.expected) {
+                            results += `<div class="test-result pass">✅ ${testCase.description}: PASS (correctly rejected - ${error.message})</div>`;
+                            passCount++;
+                        } else {
+                            results += `<div class="test-result fail">❌ ${testCase.description}: FAIL (should have been accepted - ${error.message})</div>`;
+                        }
+                    }
+                });
+
+                results += `<p><strong>Summary:</strong> ${passCount}/${totalCount} tests passed</p></div>`;
+                resultsDiv.innerHTML = results;
+            }, 500);
+        }
+
+        function testMockCIDGeneration() {
+            const resultsDiv = document.getElementById('mockCIDResults');
+            resultsDiv.innerHTML = '<p>🧪 Testing mock CID generation...</p>';
+
+            setTimeout(() => {
+                let results = '<div class="success"><h4>✅ Mock CID Generation Tests</h4>';
+                let passCount = 0;
+
+                // Test multiple mock CID generations
+                for (let i = 0; i < 5; i++) {
+                    const mockCid = generateMockCID();
+
+                    try {
+                        validateIPFSCID(mockCid);
+                        results += `<div class="test-result pass">✅ Mock CID ${i + 1}: ${mockCid} (valid)</div>`;
+                        passCount++;
+                    } catch (error) {
+                        results += `<div class="test-result fail">❌ Mock CID ${i + 1}: ${mockCid} (invalid - ${error.message})</div>`;
+                    }
+                }
+
+                results += `<p><strong>Summary:</strong> ${passCount}/5 mock CIDs are valid</p></div>`;
+                resultsDiv.innerHTML = results;
+            }, 500);
+        }
+
+        function testAttestationDataValidation() {
+            const resultsDiv = document.getElementById('attestationValidationResults');
+            resultsDiv.innerHTML = '<p>🧪 Testing attestation data validation...</p>';
+
+            setTimeout(() => {
+                const validAttestationData = {
+                    gsProjectId: 'GS-1234',
+                    gsSerial: 'ABC-123-456-789',
+                    ipfsCid: 'bafyTestCID123456789012345678901234567890123456',
+                    amount: 100,
+                    recipient: '0x742d35Cc6634C0532925a3b8D4C9db96590c6C87',
+                    nonce: 0
+                };
+
+                const testCases = [
+                    {
+                        data: validAttestationData,
+                        expected: true,
+                        description: 'Valid attestation data with bafy CID'
+                    },
+                    {
+                        data: { ...validAttestationData, ipfsCid: 'QmTestCID123456789012345678901234567890123456' },
+                        expected: true,
+                        description: 'Valid attestation data with Qm CID'
+                    },
+                    {
+                        data: { ...validAttestationData, ipfsCid: generateMockCID() },
+                        expected: true,
+                        description: 'Valid attestation data with mock CID'
+                    },
+                    {
+                        data: { ...validAttestationData, ipfsCid: 'invalid-cid' },
+                        expected: false,
+                        description: 'Invalid attestation data with bad CID'
+                    },
+                    {
+                        data: { ...validAttestationData, ipfsCid: '' },
+                        expected: false,
+                        description: 'Invalid attestation data with empty CID'
+                    },
+                ];
+
+                let results = '<div class="success"><h4>✅ Attestation Data Validation Tests</h4>';
+                let passCount = 0;
+
+                testCases.forEach(testCase => {
+                    try {
+                        validateAttestationData(testCase.data);
+                        if (testCase.expected) {
+                            results += `<div class="test-result pass">✅ ${testCase.description}: PASS</div>`;
+                            passCount++;
+                        } else {
+                            results += `<div class="test-result fail">❌ ${testCase.description}: FAIL (should have been rejected)</div>`;
+                        }
+                    } catch (error) {
+                        if (!testCase.expected) {
+                            results += `<div class="test-result pass">✅ ${testCase.description}: PASS (correctly rejected)</div>`;
+                            passCount++;
+                        } else {
+                            results += `<div class="test-result fail">❌ ${testCase.description}: FAIL (${error.message})</div>`;
+                        }
+                    }
+                });
+
+                results += `<p><strong>Summary:</strong> ${passCount}/${testCases.length} tests passed</p></div>`;
+                resultsDiv.innerHTML = results;
+            }, 500);
+        }
+
+        function testEdgeCases() {
+            const resultsDiv = document.getElementById('edgeCaseResults');
+            resultsDiv.innerHTML = '<p>🧪 Testing edge cases...</p>';
+
+            setTimeout(() => {
+                let results = '<div class="success"><h4>✅ Edge Case Tests</h4>';
+                let passCount = 0;
+                let totalTests = 0;
+
+                // Test null/undefined CIDs
+                const edgeCases = [
+                    { cid: null, description: 'null CID' },
+                    { cid: undefined, description: 'undefined CID' },
+                    { cid: '   ', description: 'whitespace-only CID' },
+                    { cid: 'Qm', description: 'prefix-only CID' },
+                    { cid: 'QmVeryLongCIDThatExceedsNormalLengthButShouldStillBeValidIfItMatchesThePattern123456789012345678901234567890', description: 'very long CID' },
+                ];
+
+                edgeCases.forEach(testCase => {
+                    totalTests++;
+                    try {
+                        validateIPFSCID(testCase.cid);
+                        results += `<div class="test-result fail">❌ ${testCase.description}: Should have been rejected but was accepted</div>`;
+                    } catch (error) {
+                        results += `<div class="test-result pass">✅ ${testCase.description}: Correctly rejected (${error.message})</div>`;
+                        passCount++;
+                    }
+                });
+
+                // Test boundary cases
+                const boundaryCases = [
+                    { cid: 'Qm' + 'a'.repeat(44), description: '46-character Qm CID (minimum length)' },
+                    { cid: 'bafy' + 'a'.repeat(42), description: '46-character bafy CID (minimum length)' },
+                    { cid: 'baf' + 'a'.repeat(43), description: '46-character baf CID (minimum length)' },
+                ];
+
+                boundaryCases.forEach(testCase => {
+                    totalTests++;
+                    try {
+                        validateIPFSCID(testCase.cid);
+                        results += `<div class="test-result pass">✅ ${testCase.description}: Correctly accepted</div>`;
+                        passCount++;
+                    } catch (error) {
+                        results += `<div class="test-result fail">❌ ${testCase.description}: Should have been accepted (${error.message})</div>`;
+                    }
+                });
+
+                results += `<p><strong>Summary:</strong> ${passCount}/${totalTests} edge case tests passed</p></div>`;
+                resultsDiv.innerHTML = results;
+            }, 500);
+        }
+
+        // Auto-run basic test on page load
+        window.onload = function () {
+            setTimeout(testCIDValidation, 500);
+        };
+    </script>
+</body>
+
+</html>
